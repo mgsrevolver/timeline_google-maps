@@ -94,6 +94,10 @@ HTML_TEMPLATE = """
             width: 100%;
             background-color: #333;
         }
+        /* Smooth transitions for heatmap canvas */
+        .leaflet-heatmap-layer {
+            transition: opacity 0.3s ease-in-out;
+        }
         #controls {
             position: absolute;
             top: 10px;
@@ -216,6 +220,20 @@ HTML_TEMPLATE = """
                 </select>
             </div>
 
+            <div class="control-group" id="dateRangeControl" style="display: none;">
+                <label>Date Range</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
+                    <select id="startMonth" style="width: 100%; padding: 5px;"></select>
+                    <select id="startYear" style="width: 100%; padding: 5px;"></select>
+                </div>
+                <div style="text-align: center; margin: 5px 0; font-size: 12px; color: #666;">to</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                    <select id="endMonth" style="width: 100%; padding: 5px;"></select>
+                    <select id="endYear" style="width: 100%; padding: 5px;"></select>
+                </div>
+                <button id="applyDateRange" style="width: 100%; margin-top: 10px; padding: 8px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply Range</button>
+            </div>
+
             <div class="control-group" id="timeSliderControl" style="display: none;">
                 <label>Timeline <span id="currentPeriod" class="value-display"></span></label>
                 <input type="range" id="timeSlider" min="0" max="100" step="1" value="0">
@@ -234,6 +252,10 @@ HTML_TEMPLATE = """
                 </label>
                 <label for="animationSpeed">Speed <span id="animationSpeedValue" class="value-display"></span>ms</label>
                 <input type="range" id="animationSpeed" min="100" max="5000" step="100" value="1000">
+                <label style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
+                    <input type="checkbox" id="smoothAnimation" style="width: auto;" checked>
+                    <span>Smooth Transitions</span>
+                </label>
             </div>
         </div>
     </div>
@@ -327,6 +349,9 @@ HTML_TEMPLATE = """
         let timePeriods = [];
         let currentPeriodIndex = 0;
         let animationInterval = null;
+        let isTransitioning = false;
+
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         const timeFilterModeSelect = document.getElementById('timeFilterMode');
         const timeGroupingSelect = document.getElementById('timeGrouping');
@@ -339,6 +364,14 @@ HTML_TEMPLATE = """
         const loopCheckbox = document.getElementById('loopAnimation');
         const animationSpeedSlider = document.getElementById('animationSpeed');
         const animationSpeedValue = document.getElementById('animationSpeedValue');
+        const smoothAnimationCheckbox = document.getElementById('smoothAnimation');
+
+        // Date range controls
+        const startMonthSelect = document.getElementById('startMonth');
+        const startYearSelect = document.getElementById('startYear');
+        const endMonthSelect = document.getElementById('endMonth');
+        const endYearSelect = document.getElementById('endYear');
+        const applyDateRangeButton = document.getElementById('applyDateRange');
 
         function formatPeriod(timestamp, grouping) {
             if (!timestamp) return 'No Date';
@@ -403,17 +436,135 @@ HTML_TEMPLATE = """
 
             if (mode === 'static' || timePeriods.length === 0) {
                 // Show all data
-                heatLayer.setLatLngs(locationData.map(p => [p[0], p[1]]));
-                currentPeriodSpan.textContent = 'All Time';
-                pointCountDiv.textContent = `${locationData.length.toLocaleString()} points`;
+                setHeatmapData(locationData.map(p => [p[0], p[1]]), 'All Time', locationData.length);
             } else {
                 // Show data for current period
                 const period = timePeriods[currentPeriodIndex];
                 if (period) {
-                    heatLayer.setLatLngs(period.points);
-                    currentPeriodSpan.textContent = formatPeriod(period.timestamp, timeGroupingSelect.value);
-                    pointCountDiv.textContent = `${period.points.length.toLocaleString()} points`;
+                    const label = formatPeriod(period.timestamp, timeGroupingSelect.value);
+                    setHeatmapData(period.points, label, period.points.length);
                 }
+            }
+        }
+
+        function setHeatmapData(points, label, count) {
+            const shouldSmooth = smoothAnimationCheckbox && smoothAnimationCheckbox.checked;
+
+            if (shouldSmooth && !isTransitioning) {
+                // Smooth transition with opacity fade
+                isTransitioning = true;
+                const heatmapCanvas = document.querySelector('.leaflet-heatmap-layer');
+
+                if (heatmapCanvas) {
+                    // Fade out
+                    heatmapCanvas.style.opacity = '0';
+
+                    setTimeout(() => {
+                        // Update data while invisible
+                        heatLayer.setLatLngs(points);
+                        currentPeriodSpan.textContent = label;
+                        pointCountDiv.textContent = `${count.toLocaleString()} points`;
+
+                        // Fade in
+                        setTimeout(() => {
+                            heatmapCanvas.style.opacity = '1';
+                            setTimeout(() => { isTransitioning = false; }, 300);
+                        }, 50);
+                    }, 300);
+                } else {
+                    // Fallback if canvas not found
+                    heatLayer.setLatLngs(points);
+                    currentPeriodSpan.textContent = label;
+                    pointCountDiv.textContent = `${count.toLocaleString()} points`;
+                    isTransitioning = false;
+                }
+            } else {
+                // Instant update
+                heatLayer.setLatLngs(points);
+                currentPeriodSpan.textContent = label;
+                pointCountDiv.textContent = `${count.toLocaleString()} points`;
+            }
+        }
+
+        function populateDateRangeSelectors() {
+            // Get min and max dates from data
+            let minTimestamp = Infinity;
+            let maxTimestamp = -Infinity;
+
+            locationData.forEach(point => {
+                if (point[2]) {
+                    minTimestamp = Math.min(minTimestamp, point[2]);
+                    maxTimestamp = Math.max(maxTimestamp, point[2]);
+                }
+            });
+
+            if (minTimestamp === Infinity || maxTimestamp === -Infinity) {
+                return; // No valid timestamps
+            }
+
+            const minDate = new Date(minTimestamp);
+            const maxDate = new Date(maxTimestamp);
+            const minYear = minDate.getFullYear();
+            const maxYear = maxDate.getFullYear();
+
+            // Populate month selectors
+            monthNames.forEach((month, index) => {
+                const option1 = document.createElement('option');
+                option1.value = index;
+                option1.textContent = month;
+                startMonthSelect.appendChild(option1);
+
+                const option2 = document.createElement('option');
+                option2.value = index;
+                option2.textContent = month;
+                endMonthSelect.appendChild(option2);
+            });
+
+            // Populate year selectors
+            for (let year = minYear; year <= maxYear; year++) {
+                const option1 = document.createElement('option');
+                option1.value = year;
+                option1.textContent = year;
+                startYearSelect.appendChild(option1);
+
+                const option2 = document.createElement('option');
+                option2.value = year;
+                option2.textContent = year;
+                endYearSelect.appendChild(option2);
+            }
+
+            // Set defaults to full range
+            startMonthSelect.value = minDate.getMonth();
+            startYearSelect.value = minYear;
+            endMonthSelect.value = maxDate.getMonth();
+            endYearSelect.value = maxYear;
+        }
+
+        function applyCustomDateRange() {
+            const startMonth = parseInt(startMonthSelect.value);
+            const startYear = parseInt(startYearSelect.value);
+            const endMonth = parseInt(endMonthSelect.value);
+            const endYear = parseInt(endYearSelect.value);
+
+            const startDate = new Date(startYear, startMonth, 1);
+            const endDate = new Date(endYear, endMonth + 1, 0, 23, 59, 59, 999); // Last day of end month
+
+            // Filter data by date range
+            const filteredData = locationData.filter(point => {
+                if (!point[2]) return false;
+                const pointDate = new Date(point[2]);
+                return pointDate >= startDate && pointDate <= endDate;
+            });
+
+            // Regroup filtered data
+            const grouping = timeGroupingSelect.value;
+            timePeriods = groupDataByTimePeriod(filteredData, grouping);
+
+            if (timePeriods.length > 0) {
+                timeSlider.max = timePeriods.length - 1;
+                currentPeriodIndex = 0;
+                timeSlider.value = 0;
+                updateHeatmapForCurrentPeriod();
             }
         }
 
@@ -452,6 +603,7 @@ HTML_TEMPLATE = """
         function toggleControlsVisibility() {
             const mode = timeFilterModeSelect.value;
             const timeGroupingControl = document.getElementById('timeGroupingControl');
+            const dateRangeControl = document.getElementById('dateRangeControl');
             const timeSliderControl = document.getElementById('timeSliderControl');
             const animationControlsDiv = document.getElementById('animationControls');
 
@@ -462,14 +614,17 @@ HTML_TEMPLATE = """
 
             if (mode === 'static') {
                 timeGroupingControl.style.display = 'none';
+                dateRangeControl.style.display = 'none';
                 timeSliderControl.style.display = 'none';
                 animationControlsDiv.style.display = 'none';
             } else if (mode === 'manual') {
                 timeGroupingControl.style.display = 'block';
+                dateRangeControl.style.display = 'block';
                 timeSliderControl.style.display = 'block';
                 animationControlsDiv.style.display = 'none';
             } else if (mode === 'animation') {
                 timeGroupingControl.style.display = 'block';
+                dateRangeControl.style.display = 'block';
                 timeSliderControl.style.display = 'block';
                 animationControlsDiv.style.display = 'block';
             }
@@ -535,7 +690,13 @@ HTML_TEMPLATE = """
                 }
             });
 
+            applyDateRangeButton.addEventListener('click', () => {
+                stopAnimation();
+                applyCustomDateRange();
+            });
+
             // Initialize time filtering
+            populateDateRangeSelectors();
             toggleControlsVisibility();
             if (timeConfig.mode !== 'static') {
                 updateTimePeriods();
