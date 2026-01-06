@@ -34,40 +34,66 @@ CONFIG = {
 
     # --- Time Filtering Settings ---
     "ENABLE_TIME_FILTER": True,
-    "TIME_GROUPING": "monthly",  # Options: 'daily', 'weekly', 'monthly', 'yearly'
-    "ANIMATION_SPEED": 1000,     # Milliseconds per frame
+    "TIME_GROUPING": "monthly",     # Options: 'monthly', 'yearly'
+    "TIME_FILTER_MODE": "static",   # Options: 'static', 'animation', 'manual'
+    "ANIMATION_SPEED": 1000,        # Milliseconds per frame when animating
+    "ANIMATION_LOOP": False,        # Whether to loop animation
+    "INTERPOLATE_MISSING_TIMESTAMPS": True,  # Interpolate timestamps for path points
 }
 ```
 
 ### 2. HTML/JavaScript Changes
 
-#### Add Date Range Controls to Control Panel
-Add new control group in the `#controls-content` div:
+#### Add Time Controls to Control Panel
+Add new control groups in the `#controls-content` div:
 ```html
 <div class="control-group">
-    <label for="dateRange">Date Range</label>
-    <input type="date" id="dateStart" />
-    <input type="date" id="dateEnd" />
-    <button id="resetDateRange">Reset</button>
+    <label for="timeFilterMode">Time Filter Mode</label>
+    <select id="timeFilterMode">
+        <option value="static">Static (All Data)</option>
+        <option value="manual">Manual (Slider)</option>
+        <option value="animation">Animation</option>
+    </select>
 </div>
 
-<div class="control-group">
+<div class="control-group" id="timeGroupingControl">
+    <label for="timeGrouping">Time Grouping</label>
+    <select id="timeGrouping">
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+    </select>
+</div>
+
+<div class="control-group" id="timeSliderControl">
     <label for="timeSlider">Timeline <span id="currentPeriod" class="value-display"></span></label>
     <input type="range" id="timeSlider" min="0" max="100" step="1">
+</div>
+
+<div class="control-group" id="animationControls">
     <div class="playback-controls">
         <button id="playPause">▶️ Play</button>
         <button id="stepBack">⏮️</button>
         <button id="stepForward">⏭️</button>
     </div>
+    <label>
+        <input type="checkbox" id="loopAnimation"> Loop Animation
+    </label>
+    <label for="animationSpeed">Speed <span id="animationSpeedValue" class="value-display"></span>ms</label>
+    <input type="range" id="animationSpeed" min="100" max="5000" step="100">
+</div>
+
+<div class="control-group" id="dataStats">
+    <span id="pointCount" class="value-display"></span>
 </div>
 ```
 
 #### JavaScript Data Processing
 1. **Parse time-stamped data** on page load
-2. **Group data by time periods** (daily/weekly/monthly)
+2. **Group data by time periods** (monthly/yearly based on selection)
 3. **Create time index** for slider navigation
-4. **Filter visible points** based on selected date range
-5. **Implement animation** with play/pause controls
+4. **Filter visible points** based on selected time period (window view)
+5. **Implement animation** with play/pause/loop controls
+6. **Toggle control visibility** based on selected mode (static/manual/animation)
 
 #### Core Functions Needed
 ```javascript
@@ -182,8 +208,32 @@ Leaflet.heat may flicker when updating data
 4. Test with sample data
 5. Proceed to frontend implementation
 
-## Questions to Resolve
-1. Should we support all time groupings or start with just monthly?
-2. Do we want cumulative view (show all data up to selected date) or window view (show only selected period)?
-3. Should animation loop by default?
-4. What should happen to points without timestamps - skip them or show in all time periods?
+## Implementation Decisions ✓
+
+### 1. Time Grouping
+**Decision:** Support **Monthly and Yearly** grouping
+- Format: MM/YY (e.g., "01/2020", "12/2023")
+- No specific date selection needed
+- User can toggle between monthly and yearly views
+
+### 2. View Mode
+**Decision:** **Window view**
+- Show only locations from the selected time period
+- Each time slice shows a discrete window of data
+- Better for identifying patterns in specific periods
+
+### 3. Missing Timestamps
+**Decision:** **Interpolate timestamps**
+- For points without timestamps, interpolate based on surrounding points
+- If in a segment with start/end times, distribute evenly across the segment
+- If no context available, skip the point
+
+### 4. Animation Behavior
+**Decision:** **Fully configurable modes**
+- **Static mode:** Show all data points (current behavior, default)
+- **Animation mode:** Play through time periods
+  - Play/Pause button
+  - Configurable loop option (on/off)
+  - Stop at end if loop is disabled
+- **Manual mode:** Use slider to scrub through time periods
+- Animation speed configurable in CONFIG

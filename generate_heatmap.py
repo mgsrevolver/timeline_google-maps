@@ -12,7 +12,7 @@ import traceback
 
 CONFIG = {
     # --- File Settings ---
-    "JSON_INPUT_FILE": "Records.json", # Your Google Takeout location history file.
+    "JSON_INPUT_FILE": "records.json", # Your Google Takeout location history file.
     "HTML_OUTPUT_FILE": "heatmap.html", # The name of the HTML map file to be generated.
 
     # --- Map Display Settings ---
@@ -38,6 +38,14 @@ CONFIG = {
     "INCLUDE_VISITS": True,
     "INCLUDE_ACTIVITIES": True,
     "INCLUDE_RAW_PATH": True,
+
+    # --- Time Filtering Settings ---
+    "ENABLE_TIME_FILTER": True,              # Enable time-based filtering and animation controls
+    "TIME_GROUPING": "monthly",              # Options: 'monthly', 'yearly'
+    "TIME_FILTER_MODE": "static",            # Options: 'static', 'manual', 'animation'
+    "ANIMATION_SPEED": 1000,                 # Milliseconds per frame when animating
+    "ANIMATION_LOOP": False,                 # Whether to loop animation
+    "INTERPOLATE_MISSING_TIMESTAMPS": True,  # Interpolate timestamps for path points
 
     # --- Execution Settings ---
     "AUTO_OPEN_IN_BROWSER": True, # Set to True to automatically open the HTML file after generation.
@@ -189,6 +197,44 @@ HTML_TEMPLATE = """
                 <label for="maxZoom">Heatmap Max Zoom <span id="maxZoomValue" class="value-display"></span></label>
                 <input type="range" id="maxZoom" min="1" max="18" step="1">
             </div>
+
+            <!-- Time Filtering Controls -->
+            <div class="control-group" id="timeFilterModeControl">
+                <label for="timeFilterMode">Time Filter Mode</label>
+                <select id="timeFilterMode">
+                    <option value="static">Static (All Data)</option>
+                    <option value="manual">Manual (Slider)</option>
+                    <option value="animation">Animation</option>
+                </select>
+            </div>
+
+            <div class="control-group" id="timeGroupingControl" style="display: none;">
+                <label for="timeGrouping">Time Grouping</label>
+                <select id="timeGrouping">
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+
+            <div class="control-group" id="timeSliderControl" style="display: none;">
+                <label>Timeline <span id="currentPeriod" class="value-display"></span></label>
+                <input type="range" id="timeSlider" min="0" max="100" step="1" value="0">
+                <div id="pointCount" class="value-display" style="margin-top: 5px;"></div>
+            </div>
+
+            <div class="control-group" id="animationControls" style="display: none;">
+                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                    <button id="stepBack" style="flex: 1;">⏮️</button>
+                    <button id="playPause" style="flex: 2;">▶️ Play</button>
+                    <button id="stepForward" style="flex: 1;">⏭️</button>
+                </div>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="loopAnimation" style="width: auto;">
+                    <span>Loop Animation</span>
+                </label>
+                <label for="animationSpeed">Speed <span id="animationSpeedValue" class="value-display"></span>ms</label>
+                <input type="range" id="animationSpeed" min="100" max="5000" step="100" value="1000">
+            </div>
         </div>
     </div>
 
@@ -198,6 +244,7 @@ HTML_TEMPLATE = """
         // --- Data and Configuration Injected by Python ---
         const locationData = %(LOCATIONS_DATA)s;
         const initialHeatOptions = %(HEATMAP_OPTIONS)s;
+        const timeConfig = %(TIME_CONFIG)s;
         const mapCenter = %(MAP_CENTER)s;
         const mapZoom = %(MAP_ZOOM)s;
         const initialMapStyle = '%(INITIAL_MAP_STYLE)s';
@@ -274,7 +321,229 @@ HTML_TEMPLATE = """
             tileLayer.setUrl(mapStyles[newStyle]);
             map.attributionControl.setPrefix(mapAttributions[newStyle]);
         });
-        
+
+        // --- Time Filtering Logic ---
+        let timeFilteredData = locationData;
+        let timePeriods = [];
+        let currentPeriodIndex = 0;
+        let animationInterval = null;
+
+        const timeFilterModeSelect = document.getElementById('timeFilterMode');
+        const timeGroupingSelect = document.getElementById('timeGrouping');
+        const timeSlider = document.getElementById('timeSlider');
+        const currentPeriodSpan = document.getElementById('currentPeriod');
+        const pointCountDiv = document.getElementById('pointCount');
+        const playPauseButton = document.getElementById('playPause');
+        const stepBackButton = document.getElementById('stepBack');
+        const stepForwardButton = document.getElementById('stepForward');
+        const loopCheckbox = document.getElementById('loopAnimation');
+        const animationSpeedSlider = document.getElementById('animationSpeed');
+        const animationSpeedValue = document.getElementById('animationSpeedValue');
+
+        function formatPeriod(timestamp, grouping) {
+            if (!timestamp) return 'No Date';
+            const date = new Date(timestamp);
+            if (grouping === 'yearly') {
+                return date.getFullYear().toString();
+            } else {
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = String(date.getFullYear()).slice(2);
+                return `${month}/${year}`;
+            }
+        }
+
+        function getPeriodKey(timestamp, grouping) {
+            if (!timestamp) return null;
+            const date = new Date(timestamp);
+            if (grouping === 'yearly') {
+                return date.getFullYear();
+            } else {
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            }
+        }
+
+        function groupDataByTimePeriod(data, grouping) {
+            const groups = new Map();
+
+            data.forEach(point => {
+                if (point.length < 3 || !point[2]) return; // Skip points without timestamps
+
+                const periodKey = getPeriodKey(point[2], grouping);
+                if (!periodKey) return;
+
+                if (!groups.has(periodKey)) {
+                    groups.set(periodKey, {
+                        key: periodKey,
+                        timestamp: point[2],
+                        points: []
+                    });
+                }
+                groups.get(periodKey).points.push([point[0], point[1]]);
+            });
+
+            // Convert to sorted array
+            const periods = Array.from(groups.values()).sort((a, b) => a.timestamp - b.timestamp);
+            return periods;
+        }
+
+        function updateTimePeriods() {
+            const grouping = timeGroupingSelect.value;
+            timePeriods = groupDataByTimePeriod(locationData, grouping);
+
+            if (timePeriods.length > 0) {
+                timeSlider.max = timePeriods.length - 1;
+                timeSlider.value = Math.min(currentPeriodIndex, timePeriods.length - 1);
+                currentPeriodIndex = parseInt(timeSlider.value);
+                updateHeatmapForCurrentPeriod();
+            }
+        }
+
+        function updateHeatmapForCurrentPeriod() {
+            const mode = timeFilterModeSelect.value;
+
+            if (mode === 'static' || timePeriods.length === 0) {
+                // Show all data
+                heatLayer.setLatLngs(locationData.map(p => [p[0], p[1]]));
+                currentPeriodSpan.textContent = 'All Time';
+                pointCountDiv.textContent = `${locationData.length.toLocaleString()} points`;
+            } else {
+                // Show data for current period
+                const period = timePeriods[currentPeriodIndex];
+                if (period) {
+                    heatLayer.setLatLngs(period.points);
+                    currentPeriodSpan.textContent = formatPeriod(period.timestamp, timeGroupingSelect.value);
+                    pointCountDiv.textContent = `${period.points.length.toLocaleString()} points`;
+                }
+            }
+        }
+
+        function startAnimation() {
+            if (animationInterval) return; // Already playing
+
+            const speed = parseInt(animationSpeedSlider.value);
+            animationInterval = setInterval(() => {
+                currentPeriodIndex++;
+
+                if (currentPeriodIndex >= timePeriods.length) {
+                    if (loopCheckbox.checked) {
+                        currentPeriodIndex = 0;
+                    } else {
+                        stopAnimation();
+                        currentPeriodIndex = timePeriods.length - 1;
+                        return;
+                    }
+                }
+
+                timeSlider.value = currentPeriodIndex;
+                updateHeatmapForCurrentPeriod();
+            }, speed);
+
+            playPauseButton.textContent = '⏸️ Pause';
+        }
+
+        function stopAnimation() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+                playPauseButton.textContent = '▶️ Play';
+            }
+        }
+
+        function toggleControlsVisibility() {
+            const mode = timeFilterModeSelect.value;
+            const timeGroupingControl = document.getElementById('timeGroupingControl');
+            const timeSliderControl = document.getElementById('timeSliderControl');
+            const animationControlsDiv = document.getElementById('animationControls');
+
+            if (!timeConfig.enabled) {
+                document.getElementById('timeFilterModeControl').style.display = 'none';
+                return;
+            }
+
+            if (mode === 'static') {
+                timeGroupingControl.style.display = 'none';
+                timeSliderControl.style.display = 'none';
+                animationControlsDiv.style.display = 'none';
+            } else if (mode === 'manual') {
+                timeGroupingControl.style.display = 'block';
+                timeSliderControl.style.display = 'block';
+                animationControlsDiv.style.display = 'none';
+            } else if (mode === 'animation') {
+                timeGroupingControl.style.display = 'block';
+                timeSliderControl.style.display = 'block';
+                animationControlsDiv.style.display = 'block';
+            }
+        }
+
+        // --- Time Filter Event Listeners ---
+        if (timeConfig.enabled) {
+            timeFilterModeSelect.value = timeConfig.mode;
+            timeGroupingSelect.value = timeConfig.grouping;
+            animationSpeedSlider.value = timeConfig.animationSpeed;
+            loopCheckbox.checked = timeConfig.animationLoop;
+            animationSpeedValue.textContent = timeConfig.animationSpeed;
+
+            timeFilterModeSelect.addEventListener('change', () => {
+                stopAnimation();
+                toggleControlsVisibility();
+                if (timeFilterModeSelect.value !== 'static') {
+                    updateTimePeriods();
+                } else {
+                    updateHeatmapForCurrentPeriod();
+                }
+            });
+
+            timeGroupingSelect.addEventListener('change', () => {
+                stopAnimation();
+                currentPeriodIndex = 0;
+                updateTimePeriods();
+            });
+
+            timeSlider.addEventListener('input', (e) => {
+                stopAnimation();
+                currentPeriodIndex = parseInt(e.target.value);
+                updateHeatmapForCurrentPeriod();
+            });
+
+            playPauseButton.addEventListener('click', () => {
+                if (animationInterval) {
+                    stopAnimation();
+                } else {
+                    startAnimation();
+                }
+            });
+
+            stepBackButton.addEventListener('click', () => {
+                stopAnimation();
+                currentPeriodIndex = Math.max(0, currentPeriodIndex - 1);
+                timeSlider.value = currentPeriodIndex;
+                updateHeatmapForCurrentPeriod();
+            });
+
+            stepForwardButton.addEventListener('click', () => {
+                stopAnimation();
+                currentPeriodIndex = Math.min(timePeriods.length - 1, currentPeriodIndex + 1);
+                timeSlider.value = currentPeriodIndex;
+                updateHeatmapForCurrentPeriod();
+            });
+
+            animationSpeedSlider.addEventListener('input', (e) => {
+                animationSpeedValue.textContent = e.target.value;
+                if (animationInterval) {
+                    stopAnimation();
+                    startAnimation();
+                }
+            });
+
+            // Initialize time filtering
+            toggleControlsVisibility();
+            if (timeConfig.mode !== 'static') {
+                updateTimePeriods();
+            } else {
+                updateHeatmapForCurrentPeriod();
+            }
+        }
+
         // --- Initialization ---
         Object.keys(mapStyles).forEach(styleName => {
             const option = document.createElement('option');
@@ -289,6 +558,51 @@ HTML_TEMPLATE = """
 </html>
 """
 
+def _parse_timestamp(timestamp_data):
+    """
+    Parse timestamp from various Google Takeout formats.
+    Returns Unix epoch milliseconds (JavaScript-compatible) or None.
+
+    Handles:
+    - timestampMs (string): "1609459200000"
+    - timestamp (string): ISO 8601 format "2021-01-01T00:00:00Z"
+    - Various other timestamp objects and formats
+    """
+    from datetime import datetime
+
+    if not timestamp_data:
+        return None
+
+    try:
+        # If it's already a number (milliseconds)
+        if isinstance(timestamp_data, (int, float)):
+            return int(timestamp_data)
+
+        # If it's a string that looks like epoch milliseconds
+        if isinstance(timestamp_data, str):
+            # Try parsing as milliseconds epoch
+            if timestamp_data.isdigit():
+                return int(timestamp_data)
+
+            # Try parsing ISO 8601 format
+            try:
+                # Handle various ISO formats
+                dt = datetime.fromisoformat(timestamp_data.replace('Z', '+00:00'))
+                return int(dt.timestamp() * 1000)
+            except:
+                pass
+
+        # If it's a dict with timestamp fields
+        if isinstance(timestamp_data, dict):
+            if 'timestampMs' in timestamp_data:
+                return int(timestamp_data['timestampMs'])
+            if 'timestamp' in timestamp_data:
+                return _parse_timestamp(timestamp_data['timestamp'])
+
+        return None
+    except:
+        return None
+
 def _process_locations_format(file_handle):
     """Processes the older 'locations' array format from Google Takeout or iOS."""
     print("[INFO] 'locations' format detected. Processing...")
@@ -300,7 +614,9 @@ def _process_locations_format(file_handle):
         if 'latitudeE7' in loc and 'longitudeE7' in loc:
             lat = loc['latitudeE7'] * E7
             lon = loc['longitudeE7'] * E7
-            points.append([lat, lon])
+            # Extract timestamp
+            timestamp = _parse_timestamp(loc.get('timestampMs') or loc.get('timestamp'))
+            points.append([lat, lon, timestamp])
         if (i + 1) % 50000 == 0:
             print(f"  [PROGRESS] {i+1:,} locations processed...")
     return points
@@ -317,22 +633,46 @@ def _process_semantic_segments_format(file_handle, config):
             coords = [float(c) for c in coord_regex.findall(lat_lng_str)]
             return [coords[0], coords[1]] if len(coords) == 2 else None
         except (ValueError, AttributeError): return None
-    
+
     segments = ijson.items(file_handle, 'semanticSegments.item')
     for i, segment in enumerate(segments):
         try:
             if config["INCLUDE_RAW_PATH"] and 'timelinePath' in segment:
-                for path_point in segment.get('timelinePath', []):
-                    if coords := parse_lat_lng_string(path_point.get('point')): points.append(coords)
+                timeline_path = segment.get('timelinePath', [])
+                # Get segment start/end times for interpolation
+                start_time = _parse_timestamp(segment.get('startTime'))
+                end_time = _parse_timestamp(segment.get('endTime'))
+
+                for idx, path_point in enumerate(timeline_path):
+                    if coords := parse_lat_lng_string(path_point.get('point')):
+                        # Try to get point-specific timestamp, or interpolate
+                        point_time = _parse_timestamp(path_point.get('time') or path_point.get('timestamp'))
+                        if not point_time and config["INTERPOLATE_MISSING_TIMESTAMPS"] and start_time and end_time:
+                            # Interpolate timestamp based on position in path
+                            progress = idx / max(len(timeline_path) - 1, 1)
+                            point_time = int(start_time + (end_time - start_time) * progress)
+                        points.append([coords[0], coords[1], point_time])
+
             elif config["INCLUDE_VISITS"] and 'visit' in segment:
                 if lat_lng := segment.get('visit', {}).get('topCandidate', {}).get('placeLocation', {}).get('latLng'):
-                    if coords := parse_lat_lng_string(lat_lng): points.append(coords)
+                    if coords := parse_lat_lng_string(lat_lng):
+                        # Use visit start time or duration start time
+                        timestamp = _parse_timestamp(
+                            segment.get('visit', {}).get('startTime') or
+                            segment.get('startTime')
+                        )
+                        points.append([coords[0], coords[1], timestamp])
+
             elif config["INCLUDE_ACTIVITIES"] and 'activity' in segment:
                 activity = segment.get('activity', {})
                 if start_lat_lng := activity.get('start', {}).get('latLng'):
-                    if coords := parse_lat_lng_string(start_lat_lng): points.append(coords)
+                    if coords := parse_lat_lng_string(start_lat_lng):
+                        timestamp = _parse_timestamp(activity.get('start', {}).get('time') or segment.get('startTime'))
+                        points.append([coords[0], coords[1], timestamp])
                 if end_lat_lng := activity.get('end', {}).get('latLng'):
-                    if coords := parse_lat_lng_string(end_lat_lng): points.append(coords)
+                    if coords := parse_lat_lng_string(end_lat_lng):
+                        timestamp = _parse_timestamp(activity.get('end', {}).get('time') or segment.get('endTime'))
+                        points.append([coords[0], coords[1], timestamp])
         except Exception:
             print(f"\n[WARNING] Error processing segment #{i+1}. Skipping.")
             continue
@@ -346,27 +686,49 @@ def _process_timeline_objects_format(file_handle, config):
     points = []
     E7 = 1e-7
     timeline_objects = ijson.items(file_handle, 'timelineObjects.item')
-    
+
     for i, t_object in enumerate(timeline_objects):
         try:
             if config["INCLUDE_VISITS"] and 'placeVisit' in t_object:
-                if location := t_object.get('placeVisit', {}).get('location', {}):
+                place_visit = t_object.get('placeVisit', {})
+                if location := place_visit.get('location', {}):
                     if 'latitudeE7' in location and 'longitudeE7' in location:
-                        points.append([location['latitudeE7'] * E7, location['longitudeE7'] * E7])
-            
+                        # Extract timestamp from duration
+                        timestamp = _parse_timestamp(
+                            place_visit.get('duration', {}).get('startTimestamp') or
+                            place_visit.get('duration', {}).get('startTimestampMs')
+                        )
+                        points.append([location['latitudeE7'] * E7, location['longitudeE7'] * E7, timestamp])
+
             elif config["INCLUDE_ACTIVITIES"] and 'activitySegment' in t_object:
                 segment = t_object.get('activitySegment', {})
+                start_time = _parse_timestamp(
+                    segment.get('duration', {}).get('startTimestamp') or
+                    segment.get('duration', {}).get('startTimestampMs')
+                )
+                end_time = _parse_timestamp(
+                    segment.get('duration', {}).get('endTimestamp') or
+                    segment.get('duration', {}).get('endTimestampMs')
+                )
+
                 if start_loc := segment.get('startLocation'):
                     if 'latitudeE7' in start_loc and 'longitudeE7' in start_loc:
-                        points.append([start_loc['latitudeE7'] * E7, start_loc['longitudeE7'] * E7])
+                        points.append([start_loc['latitudeE7'] * E7, start_loc['longitudeE7'] * E7, start_time])
+
                 if end_loc := segment.get('endLocation'):
                     if 'latitudeE7' in end_loc and 'longitudeE7' in end_loc:
-                        points.append([end_loc['latitudeE7'] * E7, end_loc['longitudeE7'] * E7])
+                        points.append([end_loc['latitudeE7'] * E7, end_loc['longitudeE7'] * E7, end_time])
 
                 if config["INCLUDE_RAW_PATH"] and (raw_path := segment.get('simplifiedRawPath')):
-                    for point in raw_path.get('points', []):
+                    raw_points = raw_path.get('points', [])
+                    for idx, point in enumerate(raw_points):
                         if 'latE7' in point and 'lngE7' in point:
-                            points.append([point['latE7'] * E7, point['lngE7'] * E7])
+                            # Try to interpolate timestamp for path points
+                            point_time = None
+                            if config["INTERPOLATE_MISSING_TIMESTAMPS"] and start_time and end_time:
+                                progress = idx / max(len(raw_points) - 1, 1)
+                                point_time = int(start_time + (end_time - start_time) * progress)
+                            points.append([point['latE7'] * E7, point['lngE7'] * E7, point_time])
         except Exception:
             print(f"\n[WARNING] Error processing timeline object #{i+1}. Skipping.")
             continue
@@ -393,22 +755,35 @@ def _process_root_array_format(file_handle, config):
 
     # The '.item' suffix tells ijson to iterate through the items of the root array.
     records = ijson.items(file_handle, 'item')
-    
+
     for i, record in enumerate(records):
         try:
             # Check if the object is a 'visit'.
             if config["INCLUDE_VISITS"] and 'visit' in record:
                 if lat_lng := record.get('visit', {}).get('topCandidate', {}).get('placeLocation'):
                     if coords := parse_lat_lng_string(lat_lng):
-                        points.append(coords)
-            
+                        # Extract timestamp from visit
+                        timestamp = _parse_timestamp(
+                            record.get('visit', {}).get('startTime') or
+                            record.get('startTime')
+                        )
+                        points.append([coords[0], coords[1], timestamp])
+
             # Check if the object is an 'activity'.
             elif config["INCLUDE_ACTIVITIES"] and 'activity' in record:
                 activity = record.get('activity', {})
                 if start_coords := parse_lat_lng_string(activity.get('start')):
-                    points.append(start_coords)
+                    timestamp = _parse_timestamp(
+                        activity.get('startTime') or
+                        record.get('startTime')
+                    )
+                    points.append([start_coords[0], start_coords[1], timestamp])
                 if end_coords := parse_lat_lng_string(activity.get('end')):
-                    points.append(end_coords)
+                    timestamp = _parse_timestamp(
+                        activity.get('endTime') or
+                        record.get('endTime')
+                    )
+                    points.append([end_coords[0], end_coords[1], timestamp])
 
         except Exception:
             # If an error occurs processing a single record, skip it and continue.
@@ -417,7 +792,7 @@ def _process_root_array_format(file_handle, config):
 
         if (i + 1) % 20000 == 0:
             print(f"  [PROGRESS] {i+1:,} records processed...")
-            
+
     return points
 
 def extract_locations(config):
@@ -501,7 +876,16 @@ def create_html_file(config, points):
         "minOpacity": config["HEATMAP_MIN_OPACITY"],
         "gradient": config["HEATMAP_GRADIENT"]
     })
-    
+
+    # Prepare time filtering configuration for JavaScript injection.
+    time_config_js = json.dumps({
+        "enabled": config["ENABLE_TIME_FILTER"],
+        "grouping": config["TIME_GROUPING"],
+        "mode": config["TIME_FILTER_MODE"],
+        "animationSpeed": config["ANIMATION_SPEED"],
+        "animationLoop": config["ANIMATION_LOOP"]
+    })
+
     # Pass the map style dictionaries to JavaScript.
     map_styles_js = json.dumps(MAP_STYLE_URLS)
     map_attributions_js = json.dumps(MAP_ATTRIBUTIONS)
@@ -511,6 +895,7 @@ def create_html_file(config, points):
         HTML_TEMPLATE
         .replace("%(LOCATIONS_DATA)s", json.dumps(points))
         .replace("%(HEATMAP_OPTIONS)s", heatmap_options_js)
+        .replace("%(TIME_CONFIG)s", time_config_js)
         .replace("%(MAP_CENTER)s", str(config["MAP_INITIAL_CENTER"]))
         .replace("%(MAP_ZOOM)s", str(config["MAP_INITIAL_ZOOM"]))
         .replace("%(INITIAL_MAP_STYLE)s", config["MAP_STYLE"])
