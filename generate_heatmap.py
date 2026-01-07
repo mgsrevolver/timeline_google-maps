@@ -94,10 +94,6 @@ HTML_TEMPLATE = """
             width: 100%;
             background-color: #333;
         }
-        /* Smooth transitions for heatmap canvas */
-        .leaflet-heatmap-layer {
-            transition: opacity 0.3s ease-in-out;
-        }
         #controls {
             position: absolute;
             top: 10px;
@@ -207,7 +203,7 @@ HTML_TEMPLATE = """
                 <label for="timeFilterMode">Time Filter Mode</label>
                 <select id="timeFilterMode">
                     <option value="static">Static (All Data)</option>
-                    <option value="manual">Manual (Slider)</option>
+                    <option value="daterange">Date Range</option>
                     <option value="animation">Animation</option>
                 </select>
             </div>
@@ -231,13 +227,14 @@ HTML_TEMPLATE = """
                     <select id="endMonth" style="width: 100%; padding: 5px;"></select>
                     <select id="endYear" style="width: 100%; padding: 5px;"></select>
                 </div>
-                <button id="applyDateRange" style="width: 100%; margin-top: 10px; padding: 8px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply Range</button>
+                <button id="applyDateRange" style="width: 100%; margin-top: 10px; padding: 8px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Set Range</button>
             </div>
 
             <div class="control-group" id="timeSliderControl" style="display: none;">
                 <label>Timeline <span id="currentPeriod" class="value-display"></span></label>
                 <input type="range" id="timeSlider" min="0" max="100" step="1" value="0">
                 <div id="pointCount" class="value-display" style="margin-top: 5px;"></div>
+                <div id="sliderHint" style="font-size: 11px; color: #888; margin-top: 5px; font-style: italic;"></div>
             </div>
 
             <div class="control-group" id="animationControls" style="display: none;">
@@ -350,6 +347,9 @@ HTML_TEMPLATE = """
         let currentPeriodIndex = 0;
         let animationInterval = null;
         let isTransitioning = false;
+        let previousPeriodPoints = [];
+        let filteredDataForRange = []; // All data in the current date range
+        let showingFullRange = true; // Whether we're showing all data in range or drilling down
 
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -372,6 +372,7 @@ HTML_TEMPLATE = """
         const endMonthSelect = document.getElementById('endMonth');
         const endYearSelect = document.getElementById('endYear');
         const applyDateRangeButton = document.getElementById('applyDateRange');
+        const sliderHint = document.getElementById('sliderHint');
 
         function formatPeriod(timestamp, grouping) {
             if (!timestamp) return 'No Date';
@@ -437,8 +438,17 @@ HTML_TEMPLATE = """
             if (mode === 'static' || timePeriods.length === 0) {
                 // Show all data
                 setHeatmapData(locationData.map(p => [p[0], p[1]]), 'All Time', locationData.length);
+            } else if (mode === 'daterange' && showingFullRange) {
+                // Date Range mode: show ALL data in the selected range
+                const points = filteredDataForRange.map(p => [p[0], p[1]]);
+                const startMonth = parseInt(startMonthSelect.value);
+                const startYear = parseInt(startYearSelect.value);
+                const endMonth = parseInt(endMonthSelect.value);
+                const endYear = parseInt(endYearSelect.value);
+                const label = `${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`;
+                setHeatmapData(points, label, filteredDataForRange.length);
             } else {
-                // Show data for current period
+                // Animation mode OR Date Range mode with slider drill-down: show data for current period
                 const period = timePeriods[currentPeriodIndex];
                 if (period) {
                     const label = formatPeriod(period.timestamp, timeGroupingSelect.value);
@@ -450,40 +460,68 @@ HTML_TEMPLATE = """
         function setHeatmapData(points, label, count) {
             const shouldSmooth = smoothAnimationCheckbox && smoothAnimationCheckbox.checked;
 
-            if (shouldSmooth && !isTransitioning) {
-                // Smooth transition with opacity fade
+            if (shouldSmooth && !isTransitioning && previousPeriodPoints.length > 0) {
+                // Smooth transition by blending old and new data over multiple frames
                 isTransitioning = true;
-                const heatmapCanvas = document.querySelector('.leaflet-heatmap-layer');
+                const blendFrames = 8; // Number of intermediate frames
+                const frameDuration = 30; // ms per frame
+                let currentFrame = 0;
 
-                if (heatmapCanvas) {
-                    // Fade out
-                    heatmapCanvas.style.opacity = '0';
+                const blendInterval = setInterval(() => {
+                    currentFrame++;
+                    const progress = currentFrame / blendFrames;
 
-                    setTimeout(() => {
-                        // Update data while invisible
+                    // Blend between old and new data
+                    const blendedPoints = blendDataPoints(previousPeriodPoints, points, progress);
+                    heatLayer.setLatLngs(blendedPoints);
+
+                    if (currentFrame >= blendFrames) {
+                        clearInterval(blendInterval);
+                        // Final update with exact new data
                         heatLayer.setLatLngs(points);
-                        currentPeriodSpan.textContent = label;
-                        pointCountDiv.textContent = `${count.toLocaleString()} points`;
+                        previousPeriodPoints = [...points];
+                        isTransitioning = false;
+                    }
+                }, frameDuration);
 
-                        // Fade in
-                        setTimeout(() => {
-                            heatmapCanvas.style.opacity = '1';
-                            setTimeout(() => { isTransitioning = false; }, 300);
-                        }, 50);
-                    }, 300);
-                } else {
-                    // Fallback if canvas not found
-                    heatLayer.setLatLngs(points);
-                    currentPeriodSpan.textContent = label;
-                    pointCountDiv.textContent = `${count.toLocaleString()} points`;
-                    isTransitioning = false;
-                }
+                // Update labels immediately
+                currentPeriodSpan.textContent = label;
+                pointCountDiv.textContent = `${count.toLocaleString()} points`;
             } else {
                 // Instant update
                 heatLayer.setLatLngs(points);
                 currentPeriodSpan.textContent = label;
                 pointCountDiv.textContent = `${count.toLocaleString()} points`;
+                previousPeriodPoints = [...points];
             }
+        }
+
+        function blendDataPoints(oldPoints, newPoints, progress) {
+            // Progress: 0 = all old data, 1 = all new data
+            // We'll create a blend by mixing samples from both datasets
+
+            const oldSampleSize = Math.floor(oldPoints.length * (1 - progress));
+            const newSampleSize = Math.floor(newPoints.length * progress);
+
+            const blended = [];
+
+            // Sample from old data (with decreasing weight)
+            for (let i = 0; i < oldSampleSize; i++) {
+                const index = Math.floor((i / oldSampleSize) * oldPoints.length);
+                if (index < oldPoints.length) {
+                    blended.push(oldPoints[index]);
+                }
+            }
+
+            // Sample from new data (with increasing weight)
+            for (let i = 0; i < newSampleSize; i++) {
+                const index = Math.floor((i / newSampleSize) * newPoints.length);
+                if (index < newPoints.length) {
+                    blended.push(newPoints[index]);
+                }
+            }
+
+            return blended;
         }
 
         function populateDateRangeSelectors() {
@@ -541,6 +579,8 @@ HTML_TEMPLATE = """
         }
 
         function applyCustomDateRange() {
+            stopAnimation(); // Stop any running animation
+
             const startMonth = parseInt(startMonthSelect.value);
             const startYear = parseInt(startYearSelect.value);
             const endMonth = parseInt(endMonthSelect.value);
@@ -549,6 +589,12 @@ HTML_TEMPLATE = """
             const startDate = new Date(startYear, startMonth, 1);
             const endDate = new Date(endYear, endMonth + 1, 0, 23, 59, 59, 999); // Last day of end month
 
+            // Validate date range
+            if (startDate > endDate) {
+                alert('Start date must be before end date');
+                return;
+            }
+
             // Filter data by date range
             const filteredData = locationData.filter(point => {
                 if (!point[2]) return false;
@@ -556,15 +602,36 @@ HTML_TEMPLATE = """
                 return pointDate >= startDate && pointDate <= endDate;
             });
 
-            // Regroup filtered data
+            if (filteredData.length === 0) {
+                alert('No data found in selected date range');
+                return;
+            }
+
+            // Store filtered data for the full range view
+            filteredDataForRange = filteredData;
+
+            // Regroup filtered data for slider drill-down
             const grouping = timeGroupingSelect.value;
             timePeriods = groupDataByTimePeriod(filteredData, grouping);
 
             if (timePeriods.length > 0) {
+                // Reset to showing full range
+                showingFullRange = true;
                 timeSlider.max = timePeriods.length - 1;
                 currentPeriodIndex = 0;
                 timeSlider.value = 0;
+
+                // Update the display to show ALL data in range
                 updateHeatmapForCurrentPeriod();
+
+                // Show hint for Date Range mode
+                if (timeFilterModeSelect.value === 'daterange') {
+                    sliderHint.textContent = 'Use slider to drill down into individual periods';
+                }
+
+                // Show feedback
+                console.log(`Date range applied: ${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`);
+                console.log(`Showing ${filteredData.length} total points across ${timePeriods.length} time periods`);
             }
         }
 
@@ -612,12 +679,15 @@ HTML_TEMPLATE = """
                 return;
             }
 
+            // Clear slider hint when changing modes
+            sliderHint.textContent = '';
+
             if (mode === 'static') {
                 timeGroupingControl.style.display = 'none';
                 dateRangeControl.style.display = 'none';
                 timeSliderControl.style.display = 'none';
                 animationControlsDiv.style.display = 'none';
-            } else if (mode === 'manual') {
+            } else if (mode === 'daterange') {
                 timeGroupingControl.style.display = 'block';
                 dateRangeControl.style.display = 'block';
                 timeSliderControl.style.display = 'block';
@@ -627,6 +697,7 @@ HTML_TEMPLATE = """
                 dateRangeControl.style.display = 'block';
                 timeSliderControl.style.display = 'block';
                 animationControlsDiv.style.display = 'block';
+                sliderHint.textContent = '';
             }
         }
 
@@ -657,6 +728,11 @@ HTML_TEMPLATE = """
             timeSlider.addEventListener('input', (e) => {
                 stopAnimation();
                 currentPeriodIndex = parseInt(e.target.value);
+                // When user moves the slider in daterange mode, switch to drill-down mode
+                if (timeFilterModeSelect.value === 'daterange') {
+                    showingFullRange = false;
+                    sliderHint.textContent = ''; // Clear hint when drilling down
+                }
                 updateHeatmapForCurrentPeriod();
             });
 
@@ -691,7 +767,6 @@ HTML_TEMPLATE = """
             });
 
             applyDateRangeButton.addEventListener('click', () => {
-                stopAnimation();
                 applyCustomDateRange();
             });
 
