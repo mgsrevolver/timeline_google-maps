@@ -138,7 +138,7 @@ All 4 formats preserve metadata:
 
 ## File Structure
 
-**Single File Architecture:**
+**Current Architecture (Python Script):**
 - All HTML, CSS, and JavaScript embedded in `generate_heatmap.py`
 - Output: Standalone `heatmap.html` (8-10MB with typical dataset)
 - No external dependencies beyond CDN libraries (Leaflet, Leaflet.heat, Leaflet.markercluster)
@@ -146,3 +146,153 @@ All 4 formats preserve metadata:
 **Dependencies:**
 - Python: `ijson` for streaming JSON parsing
 - JavaScript: Leaflet 1.9.4, Leaflet.heat 0.2.0, Leaflet.markercluster 1.5.3
+
+---
+
+## Web App Version (Planned - Client-Side Processing)
+
+### Objectives
+Create a privacy-focused web application that allows non-technical users to visualize their Google Location History without installing Python. All processing happens **entirely in the browser** - no data ever leaves the user's device.
+
+### Core Principles
+1. **Zero Data Upload** - File processing via FileReader API (client-side only)
+2. **Maximum Privacy** - No tracking, no analytics, no server-side processing
+3. **No Installation** - Works in any modern browser
+4. **Feature Parity** - All features from Python script (markers, time filters, etc.)
+5. **Single HTML File** - Entire app in one file (vanilla JS, no build step)
+
+### Technical Architecture
+
+**State Management:**
+```javascript
+LANDING    → User uploads JSON file (drag & drop)
+PROCESSING → Client-side parsing & processing (progress indicator)
+MAP_VIEW   → Interactive map with all features
+```
+
+**Key Components:**
+1. **Landing Page**
+   - File upload zone (drag & drop + click to select)
+   - Instructions (Android/iOS/Desktop paths to get data)
+   - Privacy badges ("Your data never leaves your device")
+
+2. **Parser Functions** (Port from Python → JavaScript)
+   - `parseTimestamp()` - Handle all Google timestamp formats
+   - `detectFormat()` - Identify JSON structure (4 formats supported)
+   - `processLocationsFormat()` - Old format with E7 coordinates
+   - `processSemanticSegmentsFormat()` - Android format with geo strings
+   - `processTimelineObjectsFormat()` - iOS format
+   - `processRootArrayFormat()` - Direct array format
+
+3. **Processing Pipeline**
+   ```
+   File Upload → FileReader → JSON.parse() → Format Detection
+       → Parser (JS version) → Processed Data → Map Initialization
+   ```
+
+4. **Map Interface**
+   - Reuse existing map code from Python template (already JavaScript)
+   - Auto-center map based on data bounds
+   - All existing features work (markers, clustering, time filters)
+
+### Implementation Strategy
+
+**Phase 1: Core Functionality**
+- HTML skeleton with 3 states (landing/processing/map)
+- Port 4 parser functions to JavaScript
+- File upload handling
+- Progress indicators
+
+**Phase 2: Map Integration**
+- Extract map initialization code from Python template
+- Auto-center on data
+- Ensure all controls work
+
+**Phase 3: Polish**
+- Responsive design (mobile-friendly)
+- Error handling (invalid JSON, large files, wrong format)
+- Instructions with screenshots
+- Accessibility (ARIA labels, keyboard nav)
+
+**Phase 4: Deployment**
+- Deploy to Netlify/Vercel
+- Single-file deployment (index.html only)
+- HTTPS automatic
+- Custom domain (optional)
+
+### Performance Considerations
+
+**Large File Handling:**
+- Chunked processing (10,000 records at a time)
+- Progress updates every chunk
+- `setTimeout(0)` to prevent UI freezing
+- Memory cleanup after processing
+
+**Mobile Optimization:**
+- Reduce MAX_MARKERS to 2000 on mobile
+- Disable smooth transitions (performance)
+- Simplified cluster icons
+
+**Browser Compatibility:**
+- FileReader API (95%+ browser support)
+- Fallback error messages for old browsers
+- Tested on Chrome, Firefox, Safari, Edge
+
+### Security & Privacy
+
+**Client-Side Guarantees:**
+- Zero network requests after page load (verifiable in DevTools)
+- No localStorage/IndexedDB (no persistence)
+- No third-party scripts (only CDN libraries: Leaflet)
+- No analytics or tracking
+- Open source (full transparency)
+
+**User Trust Indicators:**
+- "🔒 Your data never leaves your device" badge
+- Network tab shows no uploads
+- Open source code visible
+- Link to Python script for paranoid users
+
+### Deployment Structure
+
+```
+/
+├── index.html          # Single-file web app (NEW)
+├── generate_heatmap.py # Python script (keep for power users)
+├── netlify.toml        # Deploy config
+├── README.md           # Updated with web app link
+└── /docs               # Screenshots/guides (optional)
+```
+
+### Success Metrics
+
+- [ ] Drag & drop file upload works
+- [ ] All 4 Google Takeout formats supported
+- [ ] Map renders with all features
+- [ ] No network traffic during processing (verified)
+- [ ] Works on mobile devices
+- [ ] Clear error messages for edge cases
+- [ ] Deployed and publicly accessible
+- [ ] Documentation updated
+
+### Future Enhancements (Post-Launch)
+
+**Nice-to-Have:**
+- Download as HTML (generate standalone file like Python script)
+- Dark mode toggle
+- Export visit statistics as CSV
+- PWA features (offline support, install as app)
+- Multi-file support (combine multiple exports)
+- Advanced settings panel (customize config before processing)
+
+**Will NOT Include:**
+- Data upload to server
+- User accounts/login
+- Data persistence (IndexedDB caching)
+- Analytics/tracking
+- Monetization
+
+---
+
+**Implementation Status:** Planned (detailed plan in `/plans/hashed-wondering-hopper.md`)
+**Implementation Target:** Next session
