@@ -2,6 +2,7 @@
 
 # Timeline data
 *.json
+!vercel.json  # Exception: track Vercel config
 *.json:Zone.Identifier
 *.html
 !index.html  # Exception: track the web app
