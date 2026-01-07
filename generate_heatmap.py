@@ -18,11 +18,11 @@ CONFIG = {
     # --- Map Display Settings ---
     "MAP_INITIAL_CENTER": [-15.793889, -47.882778], # Initial map center [Latitude, Longitude].
     "MAP_INITIAL_ZOOM": 4, # Initial map zoom level.
-    "MAP_STYLE": "OpenStreetMap", # Initial map style. Options: 'OpenStreetMap', 'Dark', 'Light', 'Satellite'
+    "MAP_STYLE": "Satellite", # Initial map style. Options: 'OpenStreetMap', 'Dark', 'Light', 'Satellite'
 
     # --- Heatmap Layer Settings ---
-    "HEATMAP_RADIUS": 11,          # Initial radius of influence for each data point, in pixels.
-    "HEATMAP_BLUR": 6,             # Initial amount of blur applied to points.
+    "HEATMAP_RADIUS": 8,          # Initial radius of influence for each data point, in pixels.
+    "HEATMAP_BLUR": 4,             # Initial amount of blur applied to points.
     "HEATMAP_MAX_INTENSITY": 4.0,  # Max intensity for a single point. Lower values make the map "hotter".
     "HEATMAP_MAX_ZOOM": 16,        # The map zoom level at which the heatmap is at its maximum intensity.
     "HEATMAP_MIN_OPACITY": 0.5,    # Initial minimum opacity of the heatmap layer.
