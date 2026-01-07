@@ -600,8 +600,6 @@ HTML_TEMPLATE = """
             // Add to map if enabled
             if (markersEnabled) {
                 map.addLayer(markerClusterGroup);
-                // Ensure heatmap stays behind markers
-                heatLayer.bringToBack();
             }
 
             // Update stats display
@@ -1153,7 +1151,6 @@ HTML_TEMPLATE = """
                 if (markersEnabled) {
                     if (markerClusterGroup) {
                         map.addLayer(markerClusterGroup);
-                        heatLayer.bringToBack();
                     }
                 } else {
                     if (markerClusterGroup) {
@@ -1179,11 +1176,19 @@ HTML_TEMPLATE = """
                 createMarkerLayer(locationData);
             } catch (error) {
                 console.error('Error initializing marker layer:', error);
-                // Hide marker control if initialization fails
-                document.getElementById('markerToggleControl').style.display = 'none';
+                // Show error message but keep control visible
+                const statsDiv = document.getElementById('markerStats');
+                if (statsDiv) {
+                    statsDiv.textContent = 'Error loading markers (see console)';
+                    statsDiv.style.color = '#d32f2f';
+                }
+                // Uncheck the toggle since markers failed to load
+                const toggle = document.getElementById('showMarkersToggle');
+                if (toggle) toggle.checked = false;
+                markersEnabled = false;
             }
         } else {
-            // Hide the marker toggle control if markers are disabled
+            // Hide the marker toggle control if markers are disabled in config
             document.getElementById('markerToggleControl').style.display = 'none';
         }
     </script>
