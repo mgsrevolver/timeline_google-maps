@@ -828,12 +828,16 @@
          * Update progress UI
          */
         function updateProgress(processed, total, status) {
-            const percent = Math.round((processed / total) * 100);
-            document.getElementById('progress-percent').textContent = `${percent}%`;
-            document.getElementById('records-processed').textContent = processed.toLocaleString();
-            document.getElementById('total-records').textContent = total.toLocaleString();
-            document.getElementById('progress-bar').style.width = `${percent}%`;
-            document.getElementById('processing-status').textContent = status;
+            try {
+                const percent = Math.min(100, Math.max(0, Math.round((processed / total) * 100)));
+                document.getElementById('progress-percent').textContent = `${percent}%`;
+                document.getElementById('records-processed').textContent = Math.floor(processed).toLocaleString();
+                document.getElementById('total-records').textContent = Math.floor(total).toLocaleString();
+                document.getElementById('progress-bar').style.width = `${percent}%`;
+                document.getElementById('processing-status').textContent = status || 'Processing...';
+            } catch (e) {
+                console.error('Error updating progress:', e);
+            }
         }
 
         /* ============================================
@@ -1148,13 +1152,16 @@
             const totalItems = jsonData.length;
             const chunkSize = 1000; // Smaller chunks for large files
 
+            console.log(`Processing ${totalItems} items in root array format`);
+
             for (let i = 0; i < totalItems; i += chunkSize) {
                 if (cancelToken.cancelled) throw new Error('Processing cancelled');
 
                 const endIndex = Math.min(i + chunkSize, totalItems);
-                const chunk = jsonData.slice(i, endIndex);
 
-                for (const item of chunk) {
+                // Process items one at a time instead of slicing
+                for (let j = i; j < endIndex && j < totalItems; j++) {
+                    const item = jsonData[j];
                     // Check for semantic segments structure (visit/activity nested in root array)
                     if (item.visit && item.visit.topCandidate) {
                         const candidate = item.visit.topCandidate;
@@ -1236,7 +1243,7 @@
                     }
                 }
 
-                progressCallback(i + chunk.length, jsonData.length, 'Processing location array...');
+                progressCallback(Math.min(i + chunkSize, totalItems), totalItems, 'Processing location array...');
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
 
@@ -1284,7 +1291,13 @@
                 const jsonText = await readFileAsText(file);
 
                 updateProgress(0, 100, 'Parsing JSON...');
-                const jsonData = JSON.parse(jsonText);
+                let jsonData;
+                try {
+                    jsonData = JSON.parse(jsonText);
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    throw new Error(`Failed to parse JSON file: ${parseError.message}`);
+                }
 
                 const format = detectFormat(jsonData);
                 if (format === 'unknown') {
@@ -1292,28 +1305,34 @@
                 }
 
                 console.log(`Detected format: ${format}`);
+                console.log(`Total records to process: ${Array.isArray(jsonData) ? jsonData.length : 'N/A'}`);
 
                 const progressCallback = (processed, total, status) => {
                     updateProgress(processed, total, status);
                 };
 
                 let points;
-                switch (format) {
-                    case 'locations':
-                        points = await processLocationsFormat(jsonData, progressCallback, processingCancelToken);
-                        break;
-                    case 'semantic_segments':
-                        points = await processSemanticSegmentsFormat(jsonData, progressCallback, processingCancelToken);
-                        break;
-                    case 'timeline_objects':
-                        points = await processTimelineObjectsFormat(jsonData, progressCallback, processingCancelToken);
-                        break;
-                    case 'root_array':
-                        points = await processRootArrayFormat(jsonData, progressCallback, processingCancelToken);
-                        break;
+                try {
+                    switch (format) {
+                        case 'locations':
+                            points = await processLocationsFormat(jsonData, progressCallback, processingCancelToken);
+                            break;
+                        case 'semantic_segments':
+                            points = await processSemanticSegmentsFormat(jsonData, progressCallback, processingCancelToken);
+                            break;
+                        case 'timeline_objects':
+                            points = await processTimelineObjectsFormat(jsonData, progressCallback, processingCancelToken);
+                            break;
+                        case 'root_array':
+                            points = await processRootArrayFormat(jsonData, progressCallback, processingCancelToken);
+                            break;
+                    }
+                } catch (processingError) {
+                    console.error('Processing error:', processingError);
+                    throw new Error(`Processing failed: ${processingError.message}`);
                 }
 
-                if (points.length === 0) {
+                if (!points || points.length === 0) {
                     throw new Error('No valid location data found in file');
                 }
 
@@ -1381,23 +1400,63 @@
         }
 
         /**
+         * Decimate point array to prevent canvas size errors
+         */
+        function decimatePoints(points, maxPoints = 5000) {
+            if (points.length <= maxPoints) {
+                return points;
+            }
+            const step = Math.ceil(points.length / maxPoints);
+            return points.filter((_, index) => index % step === 0);
+        }
+
+        /**
+         * Validate coordinates - filter out invalid values
+         */
+        function validateCoordinates(points) {
+            return points.filter(p => {
+                if (typeof p.lat !== 'number' || typeof p.lon !== 'number') return false;
+                if (isNaN(p.lat) || isNaN(p.lon)) return false;
+                if (!isFinite(p.lat) || !isFinite(p.lon)) return false;
+                if (p.lat < -90 || p.lat > 90) return false;
+                if (p.lon < -180 || p.lon > 180) return false;
+                return true;
+            });
+        }
+
+        /**
          * Main map initialization function
          */
         function initMapView(locationData) {
             console.log(`Initializing map with ${locationData.length} location points`);
 
-            // Calculate bounds and center
-            const bounds = calculateBounds(locationData);
-            const mapCenter = [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLon + bounds.maxLon) / 2];
-            const mapZoom = calculateZoomLevel(bounds);
+            // Validate coordinates first
+            const validData = validateCoordinates(locationData);
+            console.log(`Valid coordinates: ${validData.length} of ${locationData.length}`);
 
-            // Create configuration objects (replicate Python's CONFIG injection)
+            if (validData.length === 0) {
+                throw new Error('No valid location data found');
+            }
+
+            // Calculate bounds from ALL valid data for proper centering
+            const bounds = calculateBounds(validData);
+            const mapCenter = [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLon + bounds.maxLon) / 2];
+
+            // Start with conservative zoom
+            const mapZoom = Math.min(calculateZoomLevel(bounds), 10);
+            console.log(`Map center: ${mapCenter}, zoom: ${mapZoom}`);
+
+            // For heatmap, use a very small subset initially
+            const heatmapDataset = decimatePoints(validData, 1000);
+            console.log(`Heatmap will use ${heatmapDataset.length} points`);
+
+            // Create configuration objects
             const initialHeatOptions = {
-                radius: 8,
-                blur: 4,
+                radius: 15,
+                blur: 10,
                 max: 4.0,
-                maxZoom: 16,
-                minOpacity: 0.5,
+                maxZoom: 8,  // Very conservative to avoid canvas issues
+                minOpacity: 0.4,
                 gradient: {
                     0.4: 'blue',
                     0.6: 'cyan',
@@ -1450,8 +1509,29 @@
             }).addTo(map);
 
             // Transform location data for heatmap (extract [lat, lon])
-            const heatmapData = locationData.map(p => [p.lat, p.lon]);
-            const heatLayer = L.heatLayer(heatmapData, initialHeatOptions).addTo(map);
+            const heatmapData = heatmapDataset.map(p => [p.lat, p.lon]);
+            console.log(`Creating heatmap with ${heatmapData.length} points`);
+
+            // Log sample of data for debugging
+            console.log('Sample heatmap data:', heatmapData.slice(0, 5));
+            console.log('Heatmap options:', initialHeatOptions);
+
+            // Create heatmap layer (but don't add yet)
+            const heatLayer = L.heatLayer(heatmapData, initialHeatOptions);
+
+            // Add heatmap after a delay to let map fully initialize
+            setTimeout(() => {
+                try {
+                    heatLayer.addTo(map);
+                    console.log('Heatmap added successfully');
+                } catch (e) {
+                    console.error('Heatmap error:', e);
+                    // Try with even fewer points
+                    const reducedData = heatmapData.slice(0, 100);
+                    console.log('Trying with reduced data:', reducedData.length);
+                    L.heatLayer(reducedData, initialHeatOptions).addTo(map);
+                }
+            }, 100);
 
             // --- Marker Layer Logic ---
             let markerClusterGroup = null;
@@ -1805,7 +1885,9 @@
                 const mode = timeFilterModeSelect.value;
 
                 if (mode === 'static' || timePeriods.length === 0) {
-                    setHeatmapData(locationData.map(p => [p.lat, p.lon]), 'All Time', locationData.length);
+                    const decimatedData = decimatePoints(locationData);
+                    const points = decimatedData.map(p => [p.lat, p.lon]);
+                    setHeatmapData(points, 'All Time', locationData.length);
                     if (markerConfig.enabled) {
                         try {
                             createMarkerLayer(locationData);
@@ -1814,7 +1896,8 @@
                         }
                     }
                 } else if (mode === 'daterange' && showingFullRange) {
-                    const points = filteredDataForRange.map(p => [p.lat, p.lon]);
+                    const decimatedData = decimatePoints(filteredDataForRange);
+                    const points = decimatedData.map(p => [p.lat, p.lon]);
                     const startMonth = parseInt(startMonthSelect.value);
                     const startYear = parseInt(startYearSelect.value);
                     const endMonth = parseInt(endMonthSelect.value);
@@ -1832,7 +1915,8 @@
                     const period = timePeriods[currentPeriodIndex];
                     if (period) {
                         const label = formatPeriod(period.timestamp, timeGroupingSelect.value);
-                        setHeatmapData(period.points, label, period.points.length);
+                        const decimatedPoints = decimatePoints(period.points);
+                        setHeatmapData(decimatedPoints, label, period.points.length);
                         if (markerConfig.enabled) {
                             try {
                                 createMarkerLayer(period.fullData);
@@ -1896,7 +1980,8 @@
                     }
                 }
 
-                return blended;
+                // Ensure blended result doesn't exceed limits
+                return decimatePoints(blended);
             }
 
             function populateDateRangeSelectors() {
