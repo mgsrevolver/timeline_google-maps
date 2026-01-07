@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Location History Visualizer</title>
 
+    <!-- Google Fonts - Space Grotesk -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <!-- Marker Clustering Plugin -->
@@ -96,11 +101,59 @@
            ============================================ */
         #landing-view {
             background: var(--bg-primary);
-            background-image:
-                radial-gradient(ellipse at top, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at bottom, rgba(212, 175, 55, 0.05) 0%, transparent 50%);
             overflow-y: auto;
             overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Full-bleed dark earth background */
+        .landing-hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .landing-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.95) 100%),
+                url('https://basemaps.cartocdn.com/dark_all/3/4/3.png'),
+                url('https://basemaps.cartocdn.com/dark_all/3/3/3.png'),
+                url('https://basemaps.cartocdn.com/dark_all/3/4/2.png'),
+                url('https://basemaps.cartocdn.com/dark_all/3/3/2.png');
+            background-size: cover, 50% 50%, 50% 50%, 50% 50%, 50% 50%;
+            background-position: center, top left, top right, bottom left, bottom right;
+            background-repeat: no-repeat;
+            z-index: 0;
+            opacity: 0.6;
+        }
+
+        /* Sample heatmap dots overlay */
+        .landing-hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 25% 30%, rgba(255, 100, 100, 0.4) 0%, rgba(255, 200, 50, 0.2) 20%, transparent 40%),
+                radial-gradient(circle at 70% 25%, rgba(255, 150, 50, 0.3) 0%, rgba(255, 100, 100, 0.15) 15%, transparent 30%),
+                radial-gradient(circle at 60% 60%, rgba(255, 200, 100, 0.35) 0%, rgba(255, 150, 50, 0.2) 18%, transparent 35%),
+                radial-gradient(circle at 30% 70%, rgba(255, 100, 100, 0.25) 0%, transparent 25%),
+                radial-gradient(circle at 80% 75%, rgba(255, 200, 50, 0.3) 0%, rgba(255, 100, 50, 0.15) 12%, transparent 25%),
+                radial-gradient(circle at 15% 50%, rgba(255, 150, 100, 0.2) 0%, transparent 20%),
+                radial-gradient(circle at 45% 40%, rgba(255, 220, 100, 0.25) 0%, transparent 15%),
+                radial-gradient(circle at 85% 45%, rgba(255, 100, 80, 0.2) 0%, transparent 18%);
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.8;
         }
 
         .landing-container {
@@ -108,6 +161,8 @@
             margin: 0 auto;
             padding: 60px 20px;
             color: var(--text-primary);
+            position: relative;
+            z-index: 2;
         }
 
         .landing-header {
@@ -116,10 +171,11 @@
         }
 
         .landing-header h1 {
-            font-size: 2.8em;
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 3em;
             margin: 0 0 12px 0;
-            font-weight: 600;
-            letter-spacing: -0.5px;
+            font-weight: 700;
+            letter-spacing: -1px;
             background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-gold) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -211,9 +267,10 @@
         }
 
         .upload-zone h2 {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 12px 0;
             font-size: 1.9em;
-            font-weight: 500;
+            font-weight: 600;
             position: relative;
             z-index: 1;
         }
@@ -1708,7 +1765,7 @@
                 "Satellite": "Tiles &copy; Esri"
             };
 
-            const initialMapStyle = "Satellite";
+            const initialMapStyle = "OpenStreetMap";
 
             // --- Map Initialization ---
             const map = L.map('map').setView(mapCenter, mapZoom);
