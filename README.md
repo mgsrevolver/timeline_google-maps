@@ -7,7 +7,7 @@ An enhanced fork of [timeline_google-maps](https://github.com/rubensbraz/timelin
 ### Option 1: Web App (Recommended for Most Users)
 **No Python installation required!** Visit the web app and upload your Google Takeout file:
 
-👉 **[Launch Web App](#)** _(Deploy to Vercel first)_
+👉 **[Launch Web App](https://timeline-google-maps.vercel.app/)**
 
 - ✅ **100% Private** - All processing happens in your browser, your data never leaves your device
 - ✅ **No Installation** - Works in any modern browser (Chrome, Firefox, Safari, Edge)
