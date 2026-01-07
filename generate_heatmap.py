@@ -1,3 +1,18 @@
+"""
+Google Location History Heatmap Generator (Enhanced)
+
+An enhanced fork of the original timeline_google-maps project by Rubens Braz.
+Original repository: https://github.com/rubensbraz/timeline_google-maps
+
+Enhancements:
+- Interactive time-based filtering (monthly/yearly)
+- Animation with smooth transitions
+- Custom date range selection
+- Playback controls
+
+License: CC BY-NC-SA 4.0 (same as original project)
+"""
+
 import ijson
 import json
 import webbrowser
