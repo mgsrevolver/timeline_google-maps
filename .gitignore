@@ -4,6 +4,7 @@
 *.json
 *.json:Zone.Identifier
 *.html
+!index.html  # Exception: track the web app
 
 # Environments
 venv-timeline

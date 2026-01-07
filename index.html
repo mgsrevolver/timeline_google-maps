@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Location History Visualizer</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Marker Clustering Plugin -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <style>
+        /* ============================================
+           BASE STYLES
+           ============================================ */
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* ============================================
+           VIEW MANAGEMENT
+           ============================================ */
+        .view {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: opacity 0.3s ease;
+        }
+
+        .view.hidden {
+            display: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .view.active {
+            display: block;
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* ============================================
+           LANDING PAGE STYLES
+           ============================================ */
+        #landing-view {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .landing-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: white;
+        }
+
+        .landing-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .landing-header h1 {
+            font-size: 2.5em;
+            margin: 0 0 10px 0;
+            font-weight: 700;
+        }
+
+        .tagline {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        .privacy-badge {
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            padding: 15px 25px;
+            text-align: center;
+            margin: 30px auto;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+        }
+
+        .privacy-badge .lock-icon {
+            font-size: 24px;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .privacy-badge strong {
+            font-size: 18px;
+        }
+
+        .upload-zone {
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 30px 0;
+            backdrop-filter: blur(5px);
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragover {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+            transform: scale(1.05);
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone h2 {
+            margin: 10px 0;
+            font-size: 1.8em;
+        }
+
+        .upload-zone p {
+            margin: 10px 0;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .file-types {
+            font-size: 0.9em !important;
+            opacity: 0.7 !important;
+            margin-top: 15px !important;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            backdrop-filter: blur(5px);
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+
+        .instructions ol {
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+
+        .instructions a {
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .instructions a:hover {
+            text-decoration: underline;
+        }
+
+        .file-paths {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .file-paths summary {
+            cursor: pointer;
+            font-weight: bold;
+            padding: 5px;
+        }
+
+        .file-paths summary:hover {
+            opacity: 0.8;
+        }
+
+        .file-paths ul {
+            margin-top: 10px;
+            line-height: 1.8;
+        }
+
+        .file-paths code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        .landing-footer {
+            text-align: center;
+            margin-top: 40px;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+
+        .landing-footer a {
+            color: white;
+            text-decoration: underline;
+        }
+
+        /* ============================================
+           PROCESSING PAGE STYLES
+           ============================================ */
+        #processing-view {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .processing-container {
+            text-align: center;
+            color: white;
+            max-width: 600px;
+            padding: 40px 20px;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid rgba(255, 255, 255, 0.3);
+            border-top: 6px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 30px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .processing-container h2 {
+            font-size: 2em;
+            margin: 0 0 15px 0;
+        }
+
+        #processing-status {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .progress-container {
+            width: 100%;
+            max-width: 500px;
+            height: 30px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px auto;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+            border-radius: 15px;
+        }
+
+        .progress-text {
+            font-size: 1.1em;
+            margin: 15px 0;
+        }
+
+        .cancel-btn {
+            margin-top: 30px;
+            padding: 12px 30px;
+            background-color: rgba(244, 67, 54, 0.8);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cancel-btn:hover {
+            background-color: rgba(244, 67, 54, 1);
+            transform: scale(1.05);
+        }
+
+        .privacy-note {
+            margin-top: 30px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        /* ============================================
+           MAP VIEW STYLES
+           ============================================ */
+        #map {
+            height: 100%;
+            width: 100%;
+            background-color: #333;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            width: 300px;
+            transition: all 0.3s ease-in-out;
+        }
+
+        #controls-header {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #controls-header h3 {
+            margin: 0;
+            padding: 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        #toggle-icon {
+            font-size: 20px;
+            font-weight: bold;
+            transition: transform 0.3s;
+        }
+
+        #controls-content {
+            padding: 15px;
+            max-height: 70vh;
+            overflow-y: auto;
+            transition: all 0.3s ease-in-out;
+        }
+
+        #controls.collapsed #controls-content {
+            max-height: 0;
+            padding: 0 15px;
+            overflow: hidden;
+        }
+
+        #controls.collapsed #toggle-icon {
+            transform: rotate(-180deg);
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .control-group select, .control-group input[type="checkbox"] {
+            font-size: 14px;
+            width: 100%;
+            padding: 5px;
+        }
+
+        .control-group .value-display {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: normal;
+            color: #111;
+        }
+
+        .location-popup {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .location-popup h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 5px;
+        }
+
+        .location-popup .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .location-popup .stat-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .location-popup .stat-value {
+            color: #333;
+        }
+
+        .location-popup .coordinates {
+            font-size: 11px;
+            color: #888;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+
+        .marker-cluster-small {
+            background-color: rgba(181, 226, 140, 0.6);
+        }
+
+        .marker-cluster-small div {
+            background-color: rgba(110, 204, 57, 0.6);
+        }
+
+        .marker-cluster-medium {
+            background-color: rgba(241, 211, 87, 0.6);
+        }
+
+        .marker-cluster-medium div {
+            background-color: rgba(240, 194, 12, 0.6);
+        }
+
+        .marker-cluster-large {
+            background-color: rgba(253, 156, 115, 0.6);
+        }
+
+        .marker-cluster-large div {
+            background-color: rgba(241, 128, 23, 0.6);
+        }
+
+        /* ============================================
+           ERROR TOAST STYLES
+           ============================================ */
+        .error-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #f44336;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-size: 16px;
+            max-width: 90%;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        .error-toast.fade-out {
+            animation: slideOut 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-50%) translateY(-100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(-50%) translateY(-100px);
+                opacity: 0;
+            }
+        }
+
+        /* ============================================
+           MOBILE RESPONSIVE STYLES
+           ============================================ */
+        @media (max-width: 768px) {
+            .landing-container {
+                padding: 20px;
+            }
+
+            .landing-header h1 {
+                font-size: 2em;
+            }
+
+            .upload-zone {
+                padding: 40px 20px;
+            }
+
+            .upload-icon {
+                font-size: 48px;
+            }
+
+            .upload-zone h2 {
+                font-size: 1.5em;
+            }
+
+            .instructions ol {
+                padding-left: 20px;
+            }
+
+            #controls {
+                width: 90%;
+                max-width: none;
+                left: 50%;
+                transform: translateX(-50%);
+                top: auto;
+                bottom: 10px;
+            }
+
+            .control-group {
+                margin-bottom: 12px;
+            }
+
+            .control-group label {
+                font-size: 13px;
+            }
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            button {
+                min-height: 44px;
+            }
+
+            input[type="range"] {
+                height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================
+         LANDING VIEW
+         ============================================ -->
+    <div id="landing-view" class="view active">
+        <div class="landing-container">
+            <header class="landing-header">
+                <h1>Google Location History Visualizer</h1>
+                <p class="tagline">Visualize your location data privately in your browser</p>
+            </header>
+
+            <div class="privacy-badge">
+                <span class="lock-icon">🔒</span>
+                <strong>100% Private</strong> — Your data never leaves your device
+            </div>
+
+            <div id="upload-zone" class="upload-zone">
+                <div class="upload-icon">📁</div>
+                <h2>Drop your Google Takeout file here</h2>
+                <p>or click to select file</p>
+                <p class="file-types">Supports: Records.json, Semantic_Location_History/*.json, Timeline/*.json</p>
+                <input type="file" id="file-input" accept=".json" hidden>
+            </div>
+
+            <div class="instructions">
+                <h3>How to get your location data:</h3>
+                <ol>
+                    <li>Visit <a href="https://takeout.google.com" target="_blank" rel="noopener">Google Takeout</a></li>
+                    <li>Deselect all, then select only "Location History"</li>
+                    <li>Choose JSON format (not KML)</li>
+                    <li>Download and extract the ZIP file</li>
+                    <li>Upload the JSON file above</li>
+                </ol>
+
+                <details class="file-paths">
+                    <summary>Where to find the file after extraction</summary>
+                    <ul>
+                        <li><strong>Android/New format:</strong> <code>Takeout/Location History/Semantic Location History/YYYY/YYYY_*.json</code></li>
+                        <li><strong>iOS format:</strong> <code>Takeout/Location History/Timeline/*.json</code></li>
+                        <li><strong>Old format:</strong> <code>Takeout/Location History/Records.json</code></li>
+                    </ul>
+                </details>
+            </div>
+
+            <footer class="landing-footer">
+                <p>Open source • No tracking • No analytics</p>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ============================================
+         PROCESSING VIEW
+         ============================================ -->
+    <div id="processing-view" class="view hidden">
+        <div class="processing-container">
+            <div class="spinner"></div>
+            <h2>Processing your location data...</h2>
+            <p id="processing-status">Reading file...</p>
+
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+
+            <p class="progress-text">
+                <span id="progress-percent">0%</span>
+                (<span id="records-processed">0</span> / <span id="total-records">0</span> records)
+            </p>
+
+            <button id="cancel-processing" class="cancel-btn">Cancel</button>
+
+            <p class="privacy-note">🔒 All processing happens locally in your browser</p>
+        </div>
+    </div>
+
+    <!-- ============================================
+         MAP VIEW
+         ============================================ -->
+    <div id="map-view" class="view hidden">
+        <div id="map"></div>
+        <div id="controls">
+            <div id="controls-header">
+                <h3>Live Controls</h3>
+                <span id="toggle-icon">▼</span>
+            </div>
+            <div id="controls-content">
+                <div class="control-group">
+                    <label for="mapStyle">Map Style</label>
+                    <select id="mapStyle"></select>
+                </div>
+                <div class="control-group">
+                    <label for="radius">Radius <span id="radiusValue" class="value-display"></span></label>
+                    <input type="range" id="radius" min="1" max="50" step="1">
+                </div>
+                <div class="control-group">
+                    <label for="blur">Blur <span id="blurValue" class="value-display"></span></label>
+                    <input type="range" id="blur" min="1" max="50" step="1">
+                </div>
+                <div class="control-group">
+                    <label for="maxIntensity">Max Intensity <span id="maxIntensityValue" class="value-display"></span></label>
+                    <input type="range" id="maxIntensity" min="0.1" max="10" step="0.1">
+                </div>
+                <div class="control-group">
+                    <label for="maxZoom">Heatmap Max Zoom <span id="maxZoomValue" class="value-display"></span></label>
+                    <input type="range" id="maxZoom" min="1" max="18" step="1">
+                </div>
+
+                <!-- Marker Layer Controls -->
+                <div class="control-group" id="markerToggleControl">
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="showMarkersToggle" style="width: auto;" checked>
+                        <span>Show Location Markers</span>
+                    </label>
+                    <div id="markerStats" style="font-size: 12px; color: #666; margin-top: 5px;"></div>
+                </div>
+
+                <!-- Time Filtering Controls -->
+                <div class="control-group" id="timeFilterModeControl">
+                    <label for="timeFilterMode">Time Filter Mode</label>
+                    <select id="timeFilterMode">
+                        <option value="static">Static (All Data)</option>
+                        <option value="daterange">Date Range</option>
+                        <option value="animation">Animation</option>
+                    </select>
+                </div>
+
+                <div class="control-group" id="timeGroupingControl" style="display: none;">
+                    <label for="timeGrouping">Time Grouping</label>
+                    <select id="timeGrouping">
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </div>
+
+                <div class="control-group" id="dateRangeControl" style="display: none;">
+                    <label>Date Range</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
+                        <select id="startMonth" style="width: 100%; padding: 5px;"></select>
+                        <select id="startYear" style="width: 100%; padding: 5px;"></select>
+                    </div>
+                    <div style="text-align: center; margin: 5px 0; font-size: 12px; color: #666;">to</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                        <select id="endMonth" style="width: 100%; padding: 5px;"></select>
+                        <select id="endYear" style="width: 100%; padding: 5px;"></select>
+                    </div>
+                    <button id="applyDateRange" style="width: 100%; margin-top: 10px; padding: 8px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Set Range</button>
+                </div>
+
+                <div class="control-group" id="timeSliderControl" style="display: none;">
+                    <label>Timeline <span id="currentPeriod" class="value-display"></span></label>
+                    <input type="range" id="timeSlider" min="0" max="100" step="1" value="0">
+                    <div id="pointCount" class="value-display" style="margin-top: 5px;"></div>
+                    <div id="sliderHint" style="font-size: 11px; color: #888; margin-top: 5px; font-style: italic;"></div>
+                </div>
+
+                <div class="control-group" id="animationControls" style="display: none;">
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <button id="stepBack" style="flex: 1;">⏮️</button>
+                        <button id="playPause" style="flex: 2;">▶️ Play</button>
+                        <button id="stepForward" style="flex: 1;">⏭️</button>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="loopAnimation" style="width: auto;">
+                        <span>Loop Animation</span>
+                    </label>
+                    <label for="animationSpeed">Speed <span id="animationSpeedValue" class="value-display"></span>ms</label>
+                    <input type="range" id="animationSpeed" min="100" max="5000" step="100" value="1000">
+                    <label style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
+                        <input type="checkbox" id="smoothAnimation" style="width: auto;" checked>
+                        <span>Smooth Transitions</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- External JavaScript Libraries -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <script>
+        /* ============================================
+           PART 1/3: CORE UTILITIES & STATE
+           ============================================ */
+        'use strict';
+
+        // Global application state
+        let appState = {
+            currentView: 'landing',
+            locationData: null,
+            processingCancelled: false
+        };
+
+        // Cancel token for async operations
+        let processingCancelToken = { cancelled: false };
+
+        /**
+         * Switch between views
+         */
+        function switchView(viewName) {
+            const views = ['landing', 'processing', 'map'];
+            views.forEach(view => {
+                const element = document.getElementById(`${view}-view`);
+                if (view === viewName) {
+                    element.classList.remove('hidden');
+                    element.classList.add('active');
+                } else {
+                    element.classList.remove('active');
+                    element.classList.add('hidden');
+                }
+            });
+            appState.currentView = viewName;
+        }
+
+        /**
+         * Show error toast notification
+         */
+        function showError(message) {
+            const toast = document.createElement('div');
+            toast.className = 'error-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        /**
+         * Check browser compatibility
+         */
+        function checkBrowserCompatibility() {
+            const requiredAPIs = {
+                'FileReader': typeof FileReader !== 'undefined',
+                'Promise': typeof Promise !== 'undefined',
+                'Map': typeof Map !== 'undefined',
+                'Set': typeof Set !== 'undefined'
+            };
+
+            const missing = Object.keys(requiredAPIs).filter(api => !requiredAPIs[api]);
+
+            if (missing.length > 0) {
+                showError(`Your browser is not supported. Missing: ${missing.join(', ')}. Please use a modern browser.`);
+                return false;
+            }
+
+            return true;
+        }
+
+        /**
+         * Detect mobile device
+         */
+        function detectMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                || window.innerWidth < 768;
+        }
+
+        /**
+         * Update progress UI
+         */
+        function updateProgress(processed, total, status) {
+            const percent = Math.round((processed / total) * 100);
+            document.getElementById('progress-percent').textContent = `${percent}%`;
+            document.getElementById('records-processed').textContent = processed.toLocaleString();
+            document.getElementById('total-records').textContent = total.toLocaleString();
+            document.getElementById('progress-bar').style.width = `${percent}%`;
+            document.getElementById('processing-status').textContent = status;
+        }
+
+        /* ============================================
+           PART 2/3: PARSERS & FILE PROCESSING
+           ============================================ */
+
+        /**
+         * Parse timestamp from various Google formats
+         */
+        function parseTimestamp(ts) {
+            if (!ts) return null;
+
+            try {
+                if (typeof ts === 'number') {
+                    return ts;
+                }
+
+                if (typeof ts === 'string') {
+                    if (/^\d+$/.test(ts)) {
+                        return parseInt(ts, 10);
+                    }
+
+                    const parsed = Date.parse(ts);
+                    return isNaN(parsed) ? null : parsed;
+                }
+
+                if (typeof ts === 'object') {
+                    if (ts.timestampMs) return parseTimestamp(ts.timestampMs);
+                    if (ts.timestamp) return parseTimestamp(ts.timestamp);
+                }
+
+                return null;
+            } catch {
+                return null;
+            }
+        }
+
+        /**
+         * Convert E7 coordinates to decimal
+         */
+        function e7ToDecimal(e7) {
+            return e7 / 1e7;
+        }
+
+        /**
+         * Parse geo string (e.g., "geo:35.123,-47.789")
+         */
+        function parseLatLngString(geoStr) {
+            if (!geoStr || typeof geoStr !== 'string') return null;
+
+            const matches = geoStr.match(/[-]?\d+\.\d+/g);
+            if (matches && matches.length === 2) {
+                return {
+                    lat: parseFloat(matches[0]),
+                    lon: parseFloat(matches[1])
+                };
+            }
+            return null;
+        }
+
+        /**
+         * Validate coordinates
+         */
+        function isValidCoordinate(lat, lon) {
+            return (
+                typeof lat === 'number' &&
+                typeof lon === 'number' &&
+                !isNaN(lat) &&
+                !isNaN(lon) &&
+                lat >= -90 &&
+                lat <= 90 &&
+                lon >= -180 &&
+                lon <= 180
+            );
+        }
+
+        /**
+         * Detect Google Takeout format
+         */
+        function detectFormat(jsonData) {
+            if (Array.isArray(jsonData)) {
+                return 'root_array';
+            }
+
+            if (typeof jsonData === 'object') {
+                if (jsonData.locations && Array.isArray(jsonData.locations)) {
+                    return 'locations';
+                }
+                if (jsonData.semanticSegments && Array.isArray(jsonData.semanticSegments)) {
+                    return 'semantic_segments';
+                }
+                if (jsonData.timelineObjects && Array.isArray(jsonData.timelineObjects)) {
+                    return 'timeline_objects';
+                }
+            }
+
+            return 'unknown';
+        }
+
+        /**
+         * Process old locations format
+         */
+        async function processLocationsFormat(jsonData, progressCallback, cancelToken) {
+            const locations = jsonData.locations;
+            const points = [];
+            const chunkSize = 10000;
+
+            for (let i = 0; i < locations.length; i += chunkSize) {
+                if (cancelToken.cancelled) throw new Error('Processing cancelled');
+
+                const chunk = locations.slice(i, Math.min(i + chunkSize, locations.length));
+
+                for (const loc of chunk) {
+                    if (!loc.latitudeE7 || !loc.longitudeE7) continue;
+
+                    const lat = e7ToDecimal(loc.latitudeE7);
+                    const lon = e7ToDecimal(loc.longitudeE7);
+
+                    if (!isValidCoordinate(lat, lon)) continue;
+
+                    points.push({
+                        lat,
+                        lon,
+                        timestamp: parseTimestamp(loc.timestampMs || loc.timestamp),
+                        placeID: null,
+                        semanticType: null,
+                        probability: null,
+                        source: 'path'
+                    });
+                }
+
+                progressCallback(i + chunk.length, locations.length, 'Processing locations...');
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            return points;
+        }
+
+        /**
+         * Process semantic segments format (Android)
+         */
+        async function processSemanticSegmentsFormat(jsonData, progressCallback, cancelToken) {
+            const segments = jsonData.semanticSegments;
+            const points = [];
+            const chunkSize = 5000;
+
+            for (let i = 0; i < segments.length; i += chunkSize) {
+                if (cancelToken.cancelled) throw new Error('Processing cancelled');
+
+                const chunk = segments.slice(i, Math.min(i + chunkSize, segments.length));
+
+                for (const segment of chunk) {
+                    // Process visits
+                    if (segment.visit && segment.visit.topCandidate) {
+                        const visit = segment.visit;
+                        const candidate = visit.topCandidate;
+                        const coords = parseLatLngString(candidate.placeLocation);
+
+                        if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                            points.push({
+                                lat: coords.lat,
+                                lon: coords.lon,
+                                timestamp: parseTimestamp(visit.startTime || segment.startTime),
+                                placeID: candidate.placeID || null,
+                                semanticType: candidate.semanticType || null,
+                                probability: candidate.probability || null,
+                                source: 'visit'
+                            });
+                        }
+                    }
+
+                    // Process activities
+                    if (segment.activity && segment.activity.start) {
+                        const activity = segment.activity;
+                        const coords = parseLatLngString(activity.start);
+
+                        if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                            const activityType = activity.topCandidate?.type || 'UNKNOWN';
+                            points.push({
+                                lat: coords.lat,
+                                lon: coords.lon,
+                                timestamp: parseTimestamp(activity.startTime || segment.startTime),
+                                placeID: null,
+                                semanticType: `Activity (${activityType})`,
+                                probability: activity.topCandidate?.probability || null,
+                                source: 'activity'
+                            });
+                        }
+                    }
+
+                    // Process path points (optional)
+                    if (segment.activity && segment.activity.waypointPath && segment.activity.waypointPath.waypoints) {
+                        for (const waypoint of segment.activity.waypointPath.waypoints) {
+                            const coords = parseLatLngString(waypoint.latLng);
+                            if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                                points.push({
+                                    lat: coords.lat,
+                                    lon: coords.lon,
+                                    timestamp: null,
+                                    placeID: null,
+                                    semanticType: null,
+                                    probability: null,
+                                    source: 'path'
+                                });
+                            }
+                        }
+                    }
+                }
+
+                progressCallback(i + chunk.length, segments.length, 'Processing semantic segments...');
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            return points;
+        }
+
+        /**
+         * Process timeline objects format (iOS)
+         */
+        async function processTimelineObjectsFormat(jsonData, progressCallback, cancelToken) {
+            const objects = jsonData.timelineObjects;
+            const points = [];
+            const chunkSize = 5000;
+
+            for (let i = 0; i < objects.length; i += chunkSize) {
+                if (cancelToken.cancelled) throw new Error('Processing cancelled');
+
+                const chunk = objects.slice(i, Math.min(i + chunkSize, objects.length));
+
+                for (const obj of chunk) {
+                    // Process place visits
+                    if (obj.placeVisit && obj.placeVisit.location) {
+                        const visit = obj.placeVisit;
+                        const loc = visit.location;
+
+                        if (loc.latE7 && loc.lngE7) {
+                            const lat = e7ToDecimal(loc.latE7);
+                            const lon = e7ToDecimal(loc.lngE7);
+
+                            if (isValidCoordinate(lat, lon)) {
+                                points.push({
+                                    lat,
+                                    lon,
+                                    timestamp: parseTimestamp(visit.startTime),
+                                    placeID: loc.placeId || null,
+                                    semanticType: loc.semanticType || null,
+                                    probability: null,
+                                    source: 'visit'
+                                });
+                            }
+                        }
+                    }
+
+                    // Process activity segments
+                    if (obj.activitySegment) {
+                        const activity = obj.activitySegment;
+
+                        if (activity.startLocation && activity.startLocation.latE7 && activity.startLocation.lngE7) {
+                            const lat = e7ToDecimal(activity.startLocation.latE7);
+                            const lon = e7ToDecimal(activity.startLocation.lngE7);
+
+                            if (isValidCoordinate(lat, lon)) {
+                                const activityType = activity.activityType || 'UNKNOWN';
+                                points.push({
+                                    lat,
+                                    lon,
+                                    timestamp: parseTimestamp(activity.startTime),
+                                    placeID: null,
+                                    semanticType: `Activity (${activityType})`,
+                                    probability: null,
+                                    source: 'activity'
+                                });
+                            }
+                        }
+
+                        // Process waypoints
+                        if (activity.waypointPath && activity.waypointPath.waypoints) {
+                            for (const waypoint of activity.waypointPath.waypoints) {
+                                if (waypoint.latE7 && waypoint.lngE7) {
+                                    const lat = e7ToDecimal(waypoint.latE7);
+                                    const lon = e7ToDecimal(waypoint.lngE7);
+
+                                    if (isValidCoordinate(lat, lon)) {
+                                        points.push({
+                                            lat,
+                                            lon,
+                                            timestamp: null,
+                                            placeID: null,
+                                            semanticType: null,
+                                            probability: null,
+                                            source: 'path'
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                progressCallback(i + chunk.length, objects.length, 'Processing timeline objects...');
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            return points;
+        }
+
+        /**
+         * Process root array format
+         */
+        async function processRootArrayFormat(jsonData, progressCallback, cancelToken) {
+            const points = [];
+            const chunkSize = 10000;
+
+            for (let i = 0; i < jsonData.length; i += chunkSize) {
+                if (cancelToken.cancelled) throw new Error('Processing cancelled');
+
+                const chunk = jsonData.slice(i, Math.min(i + chunkSize, jsonData.length));
+
+                for (const item of chunk) {
+                    let coords = null;
+
+                    if (item.latLng) {
+                        coords = parseLatLngString(item.latLng);
+                    } else if (item.latitudeE7 && item.longitudeE7) {
+                        coords = {
+                            lat: e7ToDecimal(item.latitudeE7),
+                            lon: e7ToDecimal(item.longitudeE7)
+                        };
+                    } else if (item.lat && item.lon) {
+                        coords = { lat: item.lat, lon: item.lon };
+                    }
+
+                    if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                        points.push({
+                            lat: coords.lat,
+                            lon: coords.lon,
+                            timestamp: parseTimestamp(item.timestamp || item.time),
+                            placeID: item.placeID || item.placeId || null,
+                            semanticType: item.semanticType || null,
+                            probability: item.probability || null,
+                            source: item.source || 'unknown'
+                        });
+                    }
+                }
+
+                progressCallback(i + chunk.length, jsonData.length, 'Processing location array...');
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            return points;
+        }
+
+        /**
+         * Read file as text
+         */
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+
+        /**
+         * Main file upload handler
+         */
+        async function handleFileUpload(file) {
+            if (!file.name.endsWith('.json')) {
+                showError('Please select a valid JSON file');
+                return;
+            }
+
+            const fileSizeMB = file.size / (1024 * 1024);
+            if (fileSizeMB > 500) {
+                if (!confirm(`This file is very large (${fileSizeMB.toFixed(0)}MB). Processing may take several minutes. Continue?`)) {
+                    return;
+                }
+            }
+
+            switchView('processing');
+            processingCancelToken = { cancelled: false };
+
+            document.getElementById('cancel-processing').onclick = () => {
+                processingCancelToken.cancelled = true;
+                appState.processingCancelled = true;
+            };
+
+            try {
+                updateProgress(0, 100, 'Reading file...');
+                const jsonText = await readFileAsText(file);
+
+                updateProgress(0, 100, 'Parsing JSON...');
+                const jsonData = JSON.parse(jsonText);
+
+                const format = detectFormat(jsonData);
+                if (format === 'unknown') {
+                    throw new Error('Unsupported JSON format. Please upload a valid Google Location History file.');
+                }
+
+                console.log(`Detected format: ${format}`);
+
+                const progressCallback = (processed, total, status) => {
+                    updateProgress(processed, total, status);
+                };
+
+                let points;
+                switch (format) {
+                    case 'locations':
+                        points = await processLocationsFormat(jsonData, progressCallback, processingCancelToken);
+                        break;
+                    case 'semantic_segments':
+                        points = await processSemanticSegmentsFormat(jsonData, progressCallback, processingCancelToken);
+                        break;
+                    case 'timeline_objects':
+                        points = await processTimelineObjectsFormat(jsonData, progressCallback, processingCancelToken);
+                        break;
+                    case 'root_array':
+                        points = await processRootArrayFormat(jsonData, progressCallback, processingCancelToken);
+                        break;
+                }
+
+                if (points.length === 0) {
+                    throw new Error('No valid location data found in file');
+                }
+
+                console.log(`Processed ${points.length} location points`);
+
+                appState.locationData = points;
+
+                updateProgress(100, 100, 'Initializing map...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                initMapView(points);
+                switchView('map');
+
+            } catch (error) {
+                console.error('Processing error:', error);
+
+                if (appState.processingCancelled) {
+                    showError('Processing cancelled by user');
+                } else {
+                    showError(`Error processing file: ${error.message}`);
+                }
+
+                switchView('landing');
+                appState.processingCancelled = false;
+            }
+        }
+
+        /* ============================================
+           PART 3/3: MAP INITIALIZATION
+           ============================================ */
+
+        /**
+         * Calculate bounds from location data
+         */
+        function calculateBounds(data) {
+            let minLat = Infinity, maxLat = -Infinity;
+            let minLon = Infinity, maxLon = -Infinity;
+
+            data.forEach(point => {
+                minLat = Math.min(minLat, point.lat);
+                maxLat = Math.max(maxLat, point.lat);
+                minLon = Math.min(minLon, point.lon);
+                maxLon = Math.max(maxLon, point.lon);
+            });
+
+            return { minLat, maxLat, minLon, maxLon };
+        }
+
+        /**
+         * Calculate appropriate zoom level based on bounds
+         */
+        function calculateZoomLevel(bounds) {
+            const latDiff = bounds.maxLat - bounds.minLat;
+            const lonDiff = bounds.maxLon - bounds.minLon;
+            const maxDiff = Math.max(latDiff, lonDiff);
+
+            if (maxDiff > 100) return 3;
+            if (maxDiff > 50) return 4;
+            if (maxDiff > 20) return 5;
+            if (maxDiff > 10) return 6;
+            if (maxDiff > 5) return 7;
+            if (maxDiff > 2) return 8;
+            if (maxDiff > 1) return 9;
+            return 10;
+        }
+
+        /**
+         * Main map initialization function
+         */
+        function initMapView(locationData) {
+            console.log(`Initializing map with ${locationData.length} location points`);
+
+            // Calculate bounds and center
+            const bounds = calculateBounds(locationData);
+            const mapCenter = [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLon + bounds.maxLon) / 2];
+            const mapZoom = calculateZoomLevel(bounds);
+
+            // Create configuration objects (replicate Python's CONFIG injection)
+            const initialHeatOptions = {
+                radius: 8,
+                blur: 4,
+                max: 4.0,
+                maxZoom: 16,
+                minOpacity: 0.5,
+                gradient: {
+                    0.4: 'blue',
+                    0.6: 'cyan',
+                    0.7: 'lime',
+                    0.8: 'yellow',
+                    1.0: 'red'
+                }
+            };
+
+            const timeConfig = {
+                enabled: true,
+                grouping: 'monthly',
+                mode: 'static',
+                animationSpeed: 1000,
+                animationLoop: false,
+                smoothTransitions: true
+            };
+
+            const isMobile = detectMobile();
+            const markerConfig = {
+                enabled: true,
+                visibleByDefault: !isMobile,  // Hide on mobile for performance
+                maxMarkers: isMobile ? 2000 : 5000,
+                clusterRadius: 50,
+                minVisits: 1,
+                includePathInMarkers: false
+            };
+
+            const mapStyles = {
+                "OpenStreetMap": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "Dark": "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+                "Light": "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                "Satellite": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            };
+
+            const mapAttributions = {
+                "OpenStreetMap": "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors",
+                "Dark": "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/attributions'>CARTO</a>",
+                "Light": "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/attributions'>CARTO</a>",
+                "Satellite": "Tiles &copy; Esri"
+            };
+
+            const initialMapStyle = "Satellite";
+
+            // --- Map Initialization ---
+            const map = L.map('map').setView(mapCenter, mapZoom);
+            let tileLayer = L.tileLayer(mapStyles[initialMapStyle], {
+                attribution: mapAttributions[initialMapStyle],
+                maxZoom: 19
+            }).addTo(map);
+
+            // Transform location data for heatmap (extract [lat, lon])
+            const heatmapData = locationData.map(p => [p.lat, p.lon]);
+            const heatLayer = L.heatLayer(heatmapData, initialHeatOptions).addTo(map);
+
+            // --- Marker Layer Logic ---
+            let markerClusterGroup = null;
+            let markersEnabled = markerConfig.visibleByDefault;
+            const spatialIndex = new Map();
+
+            function buildSpatialIndex(data) {
+                spatialIndex.clear();
+                data.forEach(point => {
+                    if (point.source === 'path' && !markerConfig.includePathInMarkers) return;
+                    const gridKey = `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`;
+                    if (!spatialIndex.has(gridKey)) {
+                        spatialIndex.set(gridKey, []);
+                    }
+                    spatialIndex.get(gridKey).push(point);
+                });
+            }
+
+            function calculateVisitStats(points) {
+                const totalVisits = points.length;
+                const uniqueDates = new Set();
+                points.forEach(p => {
+                    if (p.timestamp) {
+                        const date = new Date(p.timestamp);
+                        const dateKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                        uniqueDates.add(dateKey);
+                    }
+                });
+
+                const sortedDates = Array.from(uniqueDates).sort();
+                let maxStreak = 0, currentStreak = 0, prevDate = null;
+                sortedDates.forEach(dateStr => {
+                    const currentDate = new Date(dateStr);
+                    if (prevDate) {
+                        const dayDiff = Math.round((currentDate - prevDate) / (1000 * 60 * 60 * 24));
+                        if (dayDiff === 1) {
+                            currentStreak++;
+                        } else {
+                            maxStreak = Math.max(maxStreak, currentStreak);
+                            currentStreak = 1;
+                        }
+                    } else {
+                        currentStreak = 1;
+                    }
+                    prevDate = currentDate;
+                });
+                maxStreak = Math.max(maxStreak, currentStreak);
+
+                let bestSemanticType = 'Unknown Location';
+                let highestProb = 0;
+                points.forEach(p => {
+                    if (p.semanticType && p.probability > highestProb) {
+                        bestSemanticType = p.semanticType;
+                        highestProb = p.probability;
+                    }
+                });
+
+                if (bestSemanticType === 'Unknown Location') {
+                    for (let p of points) {
+                        if (p.semanticType) {
+                            bestSemanticType = p.semanticType;
+                            break;
+                        }
+                    }
+                }
+
+                const timestamps = points.map(p => p.timestamp).filter(t => t).sort((a, b) => a - b);
+                const firstVisit = timestamps.length > 0 ? new Date(timestamps[0]).toLocaleDateString() : 'Unknown';
+                const lastVisit = timestamps.length > 0 ? new Date(timestamps[timestamps.length - 1]).toLocaleDateString() : 'Unknown';
+
+                return {
+                    totalVisits,
+                    uniqueDays: uniqueDates.size,
+                    maxConsecutiveDays: maxStreak,
+                    semanticType: bestSemanticType,
+                    firstVisit,
+                    lastVisit,
+                    avgLat: points.reduce((sum, p) => sum + p.lat, 0) / points.length,
+                    avgLon: points.reduce((sum, p) => sum + p.lon, 0) / points.length
+                };
+            }
+
+            function createPopupContent(stats) {
+                return `
+                    <div class="location-popup">
+                        <h4>${stats.semanticType}</h4>
+                        <div class="stat-row">
+                            <span class="stat-label">Total Visits:</span>
+                            <span class="stat-value">${stats.totalVisits}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Unique Days:</span>
+                            <span class="stat-value">${stats.uniqueDays}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Longest Streak:</span>
+                            <span class="stat-value">${stats.maxConsecutiveDays} day${stats.maxConsecutiveDays !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">First Visit:</span>
+                            <span class="stat-value">${stats.firstVisit}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Last Visit:</span>
+                            <span class="stat-value">${stats.lastVisit}</span>
+                        </div>
+                        <div class="coordinates">
+                            ${stats.avgLat.toFixed(6)}, ${stats.avgLon.toFixed(6)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            function createMarkerLayer(data) {
+                if (markerClusterGroup) {
+                    map.removeLayer(markerClusterGroup);
+                }
+
+                buildSpatialIndex(data);
+
+                markerClusterGroup = L.markerClusterGroup({
+                    maxClusterRadius: markerConfig.clusterRadius,
+                    spiderfyOnMaxZoom: true,
+                    showCoverageOnHover: false,
+                    zoomToBoundsOnClick: false,
+                    iconCreateFunction: function(cluster) {
+                        const count = cluster.getChildCount();
+                        let className = 'marker-cluster-';
+                        if (count < 10) {
+                            className += 'small';
+                        } else if (count < 100) {
+                            className += 'medium';
+                        } else {
+                            className += 'large';
+                        }
+                        return L.divIcon({
+                            html: '<div><span>' + count + '</span></div>',
+                            className: 'marker-cluster ' + className,
+                            iconSize: L.point(40, 40)
+                        });
+                    }
+                });
+
+                let entriesToProcess = Array.from(spatialIndex.entries());
+                if (entriesToProcess.length > markerConfig.maxMarkers) {
+                    const step = Math.ceil(entriesToProcess.length / markerConfig.maxMarkers);
+                    entriesToProcess = entriesToProcess.filter((_, index) => index % step === 0);
+                }
+
+                entriesToProcess.forEach(([gridKey, points]) => {
+                    if (points.length < markerConfig.minVisits) return;
+                    const stats = calculateVisitStats(points);
+                    const marker = L.marker([stats.avgLat, stats.avgLon], {
+                        icon: L.divIcon({
+                            className: 'custom-marker',
+                            html: `<div style="background-color: #4CAF50; border-radius: 50%; width: 10px; height: 10px; border: 2px solid white;"></div>`,
+                            iconSize: [10, 10]
+                        })
+                    });
+                    marker.bindPopup(createPopupContent(stats), { maxWidth: 300, closeButton: true });
+                    markerClusterGroup.addLayer(marker);
+                });
+
+                markerClusterGroup.on('clusterclick', function(event) {
+                    const cluster = event.layer;
+                    const childMarkers = cluster.getAllChildMarkers();
+                    if (childMarkers.length > 500) {
+                        cluster.zoomToBounds();
+                        return;
+                    }
+                    let allPoints = [];
+                    childMarkers.forEach(marker => {
+                        const latLng = marker.getLatLng();
+                        const gridKey = `${latLng.lat.toFixed(4)},${latLng.lng.toFixed(4)}`;
+                        if (spatialIndex.has(gridKey)) {
+                            allPoints = allPoints.concat(spatialIndex.get(gridKey));
+                        }
+                    });
+                    const aggregateStats = calculateVisitStats(allPoints);
+                    aggregateStats.semanticType = `${childMarkers.length} Locations`;
+                    L.popup()
+                        .setLatLng(cluster.getLatLng())
+                        .setContent(createPopupContent(aggregateStats))
+                        .openOn(map);
+                });
+
+                if (markersEnabled) {
+                    map.addLayer(markerClusterGroup);
+                }
+
+                updateMarkerStats();
+            }
+
+            function updateMarkerStats() {
+                const statsDiv = document.getElementById('markerStats');
+                if (markerClusterGroup) {
+                    const markerCount = markerClusterGroup.getLayers().length;
+                    const locationCount = spatialIndex.size;
+                    statsDiv.textContent = `${markerCount} markers representing ${locationCount} unique locations`;
+                }
+            }
+
+            // --- Controls Logic ---
+            const controls = document.getElementById('controls');
+            const controlsHeader = document.getElementById('controls-header');
+            const radiusSlider = document.getElementById('radius');
+            const blurSlider = document.getElementById('blur');
+            const maxIntensitySlider = document.getElementById('maxIntensity');
+            const maxZoomSlider = document.getElementById('maxZoom');
+            const radiusValue = document.getElementById('radiusValue');
+            const blurValue = document.getElementById('blurValue');
+            const maxIntensityValue = document.getElementById('maxIntensityValue');
+            const maxZoomValue = document.getElementById('maxZoomValue');
+            const mapStyleSelect = document.getElementById('mapStyle');
+
+            function setInitialControlValues() {
+                radiusSlider.value = initialHeatOptions.radius;
+                blurSlider.value = initialHeatOptions.blur;
+                maxIntensitySlider.value = initialHeatOptions.max;
+                maxZoomSlider.value = initialHeatOptions.maxZoom;
+
+                radiusValue.textContent = radiusSlider.value;
+                blurValue.textContent = blurSlider.value;
+                maxIntensityValue.textContent = maxIntensitySlider.value;
+                maxZoomValue.textContent = maxZoomSlider.value;
+            }
+
+            controlsHeader.addEventListener('click', () => {
+                controls.classList.toggle('collapsed');
+            });
+
+            const updateHeatmapOptions = () => {
+                heatLayer.setOptions({
+                    radius: parseInt(radiusSlider.value, 10),
+                    blur: parseInt(blurSlider.value, 10),
+                    max: parseFloat(maxIntensitySlider.value),
+                    maxZoom: parseInt(maxZoomSlider.value, 10),
+                });
+            };
+
+            radiusSlider.addEventListener('input', e => {
+                radiusValue.textContent = e.target.value;
+                updateHeatmapOptions();
+            });
+            blurSlider.addEventListener('input', e => {
+                blurValue.textContent = e.target.value;
+                updateHeatmapOptions();
+            });
+            maxIntensitySlider.addEventListener('input', e => {
+                maxIntensityValue.textContent = e.target.value;
+                updateHeatmapOptions();
+            });
+            maxZoomSlider.addEventListener('input', e => {
+                maxZoomValue.textContent = e.target.value;
+                updateHeatmapOptions();
+            });
+
+            mapStyleSelect.addEventListener('change', e => {
+                const newStyle = e.target.value;
+                tileLayer.setUrl(mapStyles[newStyle]);
+                map.attributionControl.setPrefix(mapAttributions[newStyle]);
+            });
+
+            // --- Time Filtering Logic ---
+            let timeFilteredData = locationData;
+            let timePeriods = [];
+            let currentPeriodIndex = 0;
+            let animationInterval = null;
+            let isTransitioning = false;
+            let previousPeriodPoints = [];
+            let filteredDataForRange = [];
+            let showingFullRange = true;
+
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            const timeFilterModeSelect = document.getElementById('timeFilterMode');
+            const timeGroupingSelect = document.getElementById('timeGrouping');
+            const timeSlider = document.getElementById('timeSlider');
+            const currentPeriodSpan = document.getElementById('currentPeriod');
+            const pointCountDiv = document.getElementById('pointCount');
+            const playPauseButton = document.getElementById('playPause');
+            const stepBackButton = document.getElementById('stepBack');
+            const stepForwardButton = document.getElementById('stepForward');
+            const loopCheckbox = document.getElementById('loopAnimation');
+            const animationSpeedSlider = document.getElementById('animationSpeed');
+            const animationSpeedValue = document.getElementById('animationSpeedValue');
+            const smoothAnimationCheckbox = document.getElementById('smoothAnimation');
+
+            const startMonthSelect = document.getElementById('startMonth');
+            const startYearSelect = document.getElementById('startYear');
+            const endMonthSelect = document.getElementById('endMonth');
+            const endYearSelect = document.getElementById('endYear');
+            const applyDateRangeButton = document.getElementById('applyDateRange');
+            const sliderHint = document.getElementById('sliderHint');
+
+            function formatPeriod(timestamp, grouping) {
+                if (!timestamp) return 'No Date';
+                const date = new Date(timestamp);
+                if (grouping === 'yearly') {
+                    return date.getFullYear().toString();
+                } else {
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = String(date.getFullYear()).slice(2);
+                    return `${month}/${year}`;
+                }
+            }
+
+            function getPeriodKey(timestamp, grouping) {
+                if (!timestamp) return null;
+                const date = new Date(timestamp);
+                if (grouping === 'yearly') {
+                    return date.getFullYear();
+                } else {
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }
+            }
+
+            function groupDataByTimePeriod(data, grouping) {
+                const groups = new Map();
+                data.forEach(point => {
+                    if (!point.timestamp) return;
+                    const periodKey = getPeriodKey(point.timestamp, grouping);
+                    if (!periodKey) return;
+                    if (!groups.has(periodKey)) {
+                        groups.set(periodKey, {
+                            key: periodKey,
+                            timestamp: point.timestamp,
+                            points: [],
+                            fullData: []
+                        });
+                    }
+                    groups.get(periodKey).points.push([point.lat, point.lon]);
+                    groups.get(periodKey).fullData.push(point);
+                });
+                const periods = Array.from(groups.values()).sort((a, b) => a.timestamp - b.timestamp);
+                return periods;
+            }
+
+            function updateTimePeriods() {
+                const grouping = timeGroupingSelect.value;
+                timePeriods = groupDataByTimePeriod(locationData, grouping);
+                if (timePeriods.length > 0) {
+                    timeSlider.max = timePeriods.length - 1;
+                    timeSlider.value = Math.min(currentPeriodIndex, timePeriods.length - 1);
+                    currentPeriodIndex = parseInt(timeSlider.value);
+                    updateHeatmapForCurrentPeriod();
+                }
+            }
+
+            function updateHeatmapForCurrentPeriod() {
+                const mode = timeFilterModeSelect.value;
+
+                if (mode === 'static' || timePeriods.length === 0) {
+                    setHeatmapData(locationData.map(p => [p.lat, p.lon]), 'All Time', locationData.length);
+                    if (markerConfig.enabled) {
+                        try {
+                            createMarkerLayer(locationData);
+                        } catch (error) {
+                            console.error('Error updating markers:', error);
+                        }
+                    }
+                } else if (mode === 'daterange' && showingFullRange) {
+                    const points = filteredDataForRange.map(p => [p.lat, p.lon]);
+                    const startMonth = parseInt(startMonthSelect.value);
+                    const startYear = parseInt(startYearSelect.value);
+                    const endMonth = parseInt(endMonthSelect.value);
+                    const endYear = parseInt(endYearSelect.value);
+                    const label = `${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`;
+                    setHeatmapData(points, label, filteredDataForRange.length);
+                    if (markerConfig.enabled) {
+                        try {
+                            createMarkerLayer(filteredDataForRange);
+                        } catch (error) {
+                            console.error('Error updating markers:', error);
+                        }
+                    }
+                } else {
+                    const period = timePeriods[currentPeriodIndex];
+                    if (period) {
+                        const label = formatPeriod(period.timestamp, timeGroupingSelect.value);
+                        setHeatmapData(period.points, label, period.points.length);
+                        if (markerConfig.enabled) {
+                            try {
+                                createMarkerLayer(period.fullData);
+                            } catch (error) {
+                                console.error('Error updating markers:', error);
+                            }
+                        }
+                    }
+                }
+            }
+
+            function setHeatmapData(points, label, count) {
+                const shouldSmooth = smoothAnimationCheckbox && smoothAnimationCheckbox.checked;
+
+                if (shouldSmooth && !isTransitioning && previousPeriodPoints.length > 0) {
+                    isTransitioning = true;
+                    const blendFrames = 8;
+                    const frameDuration = 30;
+                    let currentFrame = 0;
+
+                    const blendInterval = setInterval(() => {
+                        currentFrame++;
+                        const progress = currentFrame / blendFrames;
+                        const blendedPoints = blendDataPoints(previousPeriodPoints, points, progress);
+                        heatLayer.setLatLngs(blendedPoints);
+
+                        if (currentFrame >= blendFrames) {
+                            clearInterval(blendInterval);
+                            heatLayer.setLatLngs(points);
+                            previousPeriodPoints = [...points];
+                            isTransitioning = false;
+                        }
+                    }, frameDuration);
+
+                    currentPeriodSpan.textContent = label;
+                    pointCountDiv.textContent = `${count.toLocaleString()} points`;
+                } else {
+                    heatLayer.setLatLngs(points);
+                    currentPeriodSpan.textContent = label;
+                    pointCountDiv.textContent = `${count.toLocaleString()} points`;
+                    previousPeriodPoints = [...points];
+                }
+            }
+
+            function blendDataPoints(oldPoints, newPoints, progress) {
+                const oldSampleSize = Math.floor(oldPoints.length * (1 - progress));
+                const newSampleSize = Math.floor(newPoints.length * progress);
+                const blended = [];
+
+                for (let i = 0; i < oldSampleSize; i++) {
+                    const index = Math.floor((i / oldSampleSize) * oldPoints.length);
+                    if (index < oldPoints.length) {
+                        blended.push(oldPoints[index]);
+                    }
+                }
+
+                for (let i = 0; i < newSampleSize; i++) {
+                    const index = Math.floor((i / newSampleSize) * newPoints.length);
+                    if (index < newPoints.length) {
+                        blended.push(newPoints[index]);
+                    }
+                }
+
+                return blended;
+            }
+
+            function populateDateRangeSelectors() {
+                let minTimestamp = Infinity, maxTimestamp = -Infinity;
+                locationData.forEach(point => {
+                    if (point.timestamp) {
+                        minTimestamp = Math.min(minTimestamp, point.timestamp);
+                        maxTimestamp = Math.max(maxTimestamp, point.timestamp);
+                    }
+                });
+
+                if (minTimestamp === Infinity || maxTimestamp === -Infinity) return;
+
+                const minDate = new Date(minTimestamp);
+                const maxDate = new Date(maxTimestamp);
+                const minYear = minDate.getFullYear();
+                const maxYear = maxDate.getFullYear();
+
+                monthNames.forEach((month, index) => {
+                    const option1 = document.createElement('option');
+                    option1.value = index;
+                    option1.textContent = month;
+                    startMonthSelect.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = index;
+                    option2.textContent = month;
+                    endMonthSelect.appendChild(option2);
+                });
+
+                for (let year = minYear; year <= maxYear; year++) {
+                    const option1 = document.createElement('option');
+                    option1.value = year;
+                    option1.textContent = year;
+                    startYearSelect.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = year;
+                    option2.textContent = year;
+                    endYearSelect.appendChild(option2);
+                }
+
+                startMonthSelect.value = minDate.getMonth();
+                startYearSelect.value = minYear;
+                endMonthSelect.value = maxDate.getMonth();
+                endYearSelect.value = maxYear;
+            }
+
+            function applyCustomDateRange() {
+                stopAnimation();
+
+                const startMonth = parseInt(startMonthSelect.value);
+                const startYear = parseInt(startYearSelect.value);
+                const endMonth = parseInt(endMonthSelect.value);
+                const endYear = parseInt(endYearSelect.value);
+
+                const startDate = new Date(startYear, startMonth, 1);
+                const endDate = new Date(endYear, endMonth + 1, 0, 23, 59, 59, 999);
+
+                if (startDate > endDate) {
+                    showError('Start date must be before end date');
+                    return;
+                }
+
+                const filteredData = locationData.filter(point => {
+                    if (!point.timestamp) return false;
+                    const pointDate = new Date(point.timestamp);
+                    return pointDate >= startDate && pointDate <= endDate;
+                });
+
+                if (filteredData.length === 0) {
+                    showError('No data found in selected date range');
+                    return;
+                }
+
+                filteredDataForRange = filteredData;
+                const grouping = timeGroupingSelect.value;
+                timePeriods = groupDataByTimePeriod(filteredData, grouping);
+
+                if (timePeriods.length > 0) {
+                    showingFullRange = true;
+                    timeSlider.max = timePeriods.length - 1;
+                    currentPeriodIndex = 0;
+                    timeSlider.value = 0;
+                    updateHeatmapForCurrentPeriod();
+
+                    if (timeFilterModeSelect.value === 'daterange') {
+                        sliderHint.textContent = 'Use slider to drill down into individual periods';
+                    }
+
+                    console.log(`Date range applied: ${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`);
+                    console.log(`Showing ${filteredData.length} total points across ${timePeriods.length} time periods`);
+                }
+            }
+
+            function startAnimation() {
+                if (animationInterval) return;
+
+                const speed = parseInt(animationSpeedSlider.value);
+                animationInterval = setInterval(() => {
+                    currentPeriodIndex++;
+
+                    if (currentPeriodIndex >= timePeriods.length) {
+                        if (loopCheckbox.checked) {
+                            currentPeriodIndex = 0;
+                        } else {
+                            stopAnimation();
+                            currentPeriodIndex = timePeriods.length - 1;
+                            return;
+                        }
+                    }
+
+                    timeSlider.value = currentPeriodIndex;
+                    updateHeatmapForCurrentPeriod();
+                }, speed);
+
+                playPauseButton.textContent = '⏸️ Pause';
+            }
+
+            function stopAnimation() {
+                if (animationInterval) {
+                    clearInterval(animationInterval);
+                    animationInterval = null;
+                    playPauseButton.textContent = '▶️ Play';
+                }
+            }
+
+            function toggleControlsVisibility() {
+                const mode = timeFilterModeSelect.value;
+                const timeGroupingControl = document.getElementById('timeGroupingControl');
+                const dateRangeControl = document.getElementById('dateRangeControl');
+                const timeSliderControl = document.getElementById('timeSliderControl');
+                const animationControlsDiv = document.getElementById('animationControls');
+
+                if (!timeConfig.enabled) {
+                    document.getElementById('timeFilterModeControl').style.display = 'none';
+                    return;
+                }
+
+                sliderHint.textContent = '';
+
+                if (mode === 'static') {
+                    timeGroupingControl.style.display = 'none';
+                    dateRangeControl.style.display = 'none';
+                    timeSliderControl.style.display = 'none';
+                    animationControlsDiv.style.display = 'none';
+                } else if (mode === 'daterange') {
+                    timeGroupingControl.style.display = 'block';
+                    dateRangeControl.style.display = 'block';
+                    timeSliderControl.style.display = 'block';
+                    animationControlsDiv.style.display = 'none';
+                } else if (mode === 'animation') {
+                    timeGroupingControl.style.display = 'block';
+                    dateRangeControl.style.display = 'block';
+                    timeSliderControl.style.display = 'block';
+                    animationControlsDiv.style.display = 'block';
+                    sliderHint.textContent = '';
+                }
+            }
+
+            // Time Filter Event Listeners
+            if (timeConfig.enabled) {
+                timeFilterModeSelect.value = timeConfig.mode;
+                timeGroupingSelect.value = timeConfig.grouping;
+                animationSpeedSlider.value = timeConfig.animationSpeed;
+                loopCheckbox.checked = timeConfig.animationLoop;
+                smoothAnimationCheckbox.checked = timeConfig.smoothTransitions;
+                animationSpeedValue.textContent = timeConfig.animationSpeed;
+
+                timeFilterModeSelect.addEventListener('change', () => {
+                    stopAnimation();
+                    toggleControlsVisibility();
+                    if (timeFilterModeSelect.value !== 'static') {
+                        updateTimePeriods();
+                    } else {
+                        updateHeatmapForCurrentPeriod();
+                    }
+                });
+
+                timeGroupingSelect.addEventListener('change', () => {
+                    stopAnimation();
+                    currentPeriodIndex = 0;
+                    updateTimePeriods();
+                });
+
+                timeSlider.addEventListener('input', (e) => {
+                    stopAnimation();
+                    currentPeriodIndex = parseInt(e.target.value);
+                    if (timeFilterModeSelect.value === 'daterange') {
+                        showingFullRange = false;
+                        sliderHint.textContent = '';
+                    }
+                    updateHeatmapForCurrentPeriod();
+                });
+
+                playPauseButton.addEventListener('click', () => {
+                    if (animationInterval) {
+                        stopAnimation();
+                    } else {
+                        startAnimation();
+                    }
+                });
+
+                stepBackButton.addEventListener('click', () => {
+                    stopAnimation();
+                    currentPeriodIndex = Math.max(0, currentPeriodIndex - 1);
+                    timeSlider.value = currentPeriodIndex;
+                    updateHeatmapForCurrentPeriod();
+                });
+
+                stepForwardButton.addEventListener('click', () => {
+                    stopAnimation();
+                    currentPeriodIndex = Math.min(timePeriods.length - 1, currentPeriodIndex + 1);
+                    timeSlider.value = currentPeriodIndex;
+                    updateHeatmapForCurrentPeriod();
+                });
+
+                animationSpeedSlider.addEventListener('input', (e) => {
+                    animationSpeedValue.textContent = e.target.value;
+                    if (animationInterval) {
+                        stopAnimation();
+                        startAnimation();
+                    }
+                });
+
+                applyDateRangeButton.addEventListener('click', () => {
+                    applyCustomDateRange();
+                });
+
+                populateDateRangeSelectors();
+                toggleControlsVisibility();
+                if (timeConfig.mode !== 'static') {
+                    updateTimePeriods();
+                } else {
+                    updateHeatmapForCurrentPeriod();
+                }
+            }
+
+            // Marker Toggle Event Listener
+            if (markerConfig.enabled) {
+                document.getElementById('showMarkersToggle').checked = markersEnabled;
+                document.getElementById('showMarkersToggle').addEventListener('change', (e) => {
+                    markersEnabled = e.target.checked;
+                    if (markersEnabled) {
+                        if (markerClusterGroup) {
+                            map.addLayer(markerClusterGroup);
+                        }
+                    } else {
+                        if (markerClusterGroup) {
+                            map.removeLayer(markerClusterGroup);
+                        }
+                    }
+                });
+            }
+
+            // Map Style Selector Initialization
+            Object.keys(mapStyles).forEach(styleName => {
+                const option = document.createElement('option');
+                option.value = styleName;
+                option.textContent = styleName;
+                mapStyleSelect.appendChild(option);
+            });
+            mapStyleSelect.value = initialMapStyle;
+            setInitialControlValues();
+
+            // Initialize Marker Layer
+            if (markerConfig.enabled) {
+                try {
+                    createMarkerLayer(locationData);
+                } catch (error) {
+                    console.error('Error initializing marker layer:', error);
+                    const statsDiv = document.getElementById('markerStats');
+                    if (statsDiv) {
+                        statsDiv.textContent = 'Error loading markers (see console)';
+                        statsDiv.style.color = '#d32f2f';
+                    }
+                    const toggle = document.getElementById('showMarkersToggle');
+                    if (toggle) toggle.checked = false;
+                    markersEnabled = false;
+                }
+            } else {
+                document.getElementById('markerToggleControl').style.display = 'none';
+            }
+
+            console.log('Map initialization complete');
+        }
+
+        /* ============================================
+           INITIALIZATION
+           ============================================ */
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!checkBrowserCompatibility()) {
+                return;
+            }
+
+            const uploadZone = document.getElementById('upload-zone');
+            const fileInput = document.getElementById('file-input');
+
+            uploadZone.addEventListener('click', () => fileInput.click());
+
+            uploadZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('dragover');
+            });
+
+            uploadZone.addEventListener('dragleave', () => {
+                uploadZone.classList.remove('dragover');
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadZone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileUpload(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFileUpload(e.target.files[0]);
+                }
+            });
+
+            console.log('Google Location History Visualizer loaded');
+            console.log('Mobile device:', detectMobile());
+        });
+    </script>
+</body>
+</html>
