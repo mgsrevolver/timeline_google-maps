@@ -1341,10 +1341,15 @@
                 appState.locationData = points;
 
                 updateProgress(100, 100, 'Initializing map...');
-                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // IMPORTANT: Switch to map view FIRST so the container has dimensions
+                // Otherwise the heatmap canvas calculation fails with 0-size container
+                switchView('map');
+
+                // Wait for DOM to update and container to be visible
+                await new Promise(resolve => setTimeout(resolve, 100));
 
                 initMapView(points);
-                switchView('map');
 
             } catch (error) {
                 console.error('Processing error:', error);
@@ -1446,17 +1451,17 @@
             const mapZoom = Math.min(calculateZoomLevel(bounds), 10);
             console.log(`Map center: ${mapCenter}, zoom: ${mapZoom}`);
 
-            // For heatmap, use a very small subset initially
-            const heatmapDataset = decimatePoints(validData, 1000);
+            // Decimate heatmap data if very large
+            const heatmapDataset = decimatePoints(validData, 10000);
             console.log(`Heatmap will use ${heatmapDataset.length} points`);
 
             // Create configuration objects
             const initialHeatOptions = {
-                radius: 15,
-                blur: 10,
+                radius: 8,
+                blur: 6,
                 max: 4.0,
-                maxZoom: 8,  // Very conservative to avoid canvas issues
-                minOpacity: 0.4,
+                maxZoom: 17,
+                minOpacity: 0.5,
                 gradient: {
                     0.4: 'blue',
                     0.6: 'cyan',
@@ -1512,26 +1517,9 @@
             const heatmapData = heatmapDataset.map(p => [p.lat, p.lon]);
             console.log(`Creating heatmap with ${heatmapData.length} points`);
 
-            // Log sample of data for debugging
-            console.log('Sample heatmap data:', heatmapData.slice(0, 5));
-            console.log('Heatmap options:', initialHeatOptions);
-
-            // Create heatmap layer (but don't add yet)
-            const heatLayer = L.heatLayer(heatmapData, initialHeatOptions);
-
-            // Add heatmap after a delay to let map fully initialize
-            setTimeout(() => {
-                try {
-                    heatLayer.addTo(map);
-                    console.log('Heatmap added successfully');
-                } catch (e) {
-                    console.error('Heatmap error:', e);
-                    // Try with even fewer points
-                    const reducedData = heatmapData.slice(0, 100);
-                    console.log('Trying with reduced data:', reducedData.length);
-                    L.heatLayer(reducedData, initialHeatOptions).addTo(map);
-                }
-            }, 100);
+            // Create and add heatmap layer
+            const heatLayer = L.heatLayer(heatmapData, initialHeatOptions).addTo(map);
+            console.log('Heatmap added successfully');
 
             // --- Marker Layer Logic ---
             let markerClusterGroup = null;
