@@ -21,10 +21,10 @@ CONFIG = {
     "MAP_STYLE": "OpenStreetMap", # Initial map style. Options: 'OpenStreetMap', 'Dark', 'Light', 'Satellite'
 
     # --- Heatmap Layer Settings ---
-    "HEATMAP_RADIUS": 7,           # Initial radius of influence for each data point, in pixels.
-    "HEATMAP_BLUR": 8,             # Initial amount of blur applied to points.
-    "HEATMAP_MAX_INTENSITY": 5.0,  # Max intensity for a single point. Lower values make the map "hotter".
-    "HEATMAP_MAX_ZOOM": 18,        # The map zoom level at which the heatmap is at its maximum intensity.
+    "HEATMAP_RADIUS": 11,          # Initial radius of influence for each data point, in pixels.
+    "HEATMAP_BLUR": 6,             # Initial amount of blur applied to points.
+    "HEATMAP_MAX_INTENSITY": 4.0,  # Max intensity for a single point. Lower values make the map "hotter".
+    "HEATMAP_MAX_ZOOM": 16,        # The map zoom level at which the heatmap is at its maximum intensity.
     "HEATMAP_MIN_OPACITY": 0.5,    # Initial minimum opacity of the heatmap layer.
     "HEATMAP_GRADIENT": {          # The color gradient of the heatmap.
         0.4: 'blue',
@@ -42,9 +42,10 @@ CONFIG = {
     # --- Time Filtering Settings ---
     "ENABLE_TIME_FILTER": True,              # Enable time-based filtering and animation controls
     "TIME_GROUPING": "monthly",              # Options: 'monthly', 'yearly'
-    "TIME_FILTER_MODE": "static",            # Options: 'static', 'manual', 'animation'
-    "ANIMATION_SPEED": 1000,                 # Milliseconds per frame when animating
+    "TIME_FILTER_MODE": "static",            # Options: 'static', 'daterange', 'animation'
+    "ANIMATION_SPEED": 100,                  # Milliseconds per frame when animating
     "ANIMATION_LOOP": False,                 # Whether to loop animation
+    "SMOOTH_TRANSITIONS": True,              # Enable smooth blend transitions between periods
     "INTERPOLATE_MISSING_TIMESTAMPS": True,  # Interpolate timestamps for path points
 
     # --- Execution Settings ---
@@ -707,6 +708,7 @@ HTML_TEMPLATE = """
             timeGroupingSelect.value = timeConfig.grouping;
             animationSpeedSlider.value = timeConfig.animationSpeed;
             loopCheckbox.checked = timeConfig.animationLoop;
+            smoothAnimationCheckbox.checked = timeConfig.smoothTransitions;
             animationSpeedValue.textContent = timeConfig.animationSpeed;
 
             timeFilterModeSelect.addEventListener('change', () => {
@@ -1119,7 +1121,8 @@ def create_html_file(config, points):
         "grouping": config["TIME_GROUPING"],
         "mode": config["TIME_FILTER_MODE"],
         "animationSpeed": config["ANIMATION_SPEED"],
-        "animationLoop": config["ANIMATION_LOOP"]
+        "animationLoop": config["ANIMATION_LOOP"],
+        "smoothTransitions": config["SMOOTH_TRANSITIONS"]
     })
 
     # Pass the map style dictionaries to JavaScript.
