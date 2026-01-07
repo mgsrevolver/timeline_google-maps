@@ -1,10 +1,22 @@
 # Google Location History Heatmap Generator (Enhanced)
 
-An enhanced fork of [timeline_google-maps](https://github.com/rubensbraz/timeline_google-maps) by Rubens Braz, adding **interactive time-based filtering and animation features** to visualize your location history across different time periods.
+An enhanced fork of [timeline_google-maps](https://github.com/rubensbraz/timeline_google-maps) by Rubens Braz, adding **interactive time-based filtering, animation features, and a privacy-focused web app** to visualize your location history.
 
-This project provides a Python script that processes your Google Takeout Location History data (`Records.json`) and generates a beautiful, interactive, single-file HTML heatmap to visualize your life's travels.
+## 🌐 Two Ways to Use
 
-The script is designed to be highly configurable, efficient with large data files, and entirely offline, ensuring your location data remains private. The final output is a single `heatmap.html` file that you can open in any web browser.
+### Option 1: Web App (Recommended for Most Users)
+**No Python installation required!** Visit the web app and upload your Google Takeout file:
+
+👉 **[Launch Web App](#)** _(Deploy to Vercel first)_
+
+- ✅ **100% Private** - All processing happens in your browser, your data never leaves your device
+- ✅ **No Installation** - Works in any modern browser (Chrome, Firefox, Safari, Edge)
+- ✅ **Mobile-Friendly** - Fully responsive design with touch support
+- ✅ **All Features** - Complete feature parity with Python script (markers, time filters, animations)
+- ✅ **Drag & Drop** - Simply drag your JSON file to visualize
+
+### Option 2: Python Script (For Power Users)
+Use the command-line Python script for maximum configurability and automation.
 
 ![Heatmap Screenshot](example.png)
 
