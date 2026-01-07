@@ -10,6 +10,19 @@ The script is designed to be highly configurable, efficient with large data file
 
 ## New Features in This Fork
 
+### Interactive Location Markers with Visit Statistics
+- **Clickable Markers**: Click any location to see detailed visit statistics
+- **Smart Clustering**: Markers automatically cluster at different zoom levels
+  - Zoomed out: Clusters show neighborhood-level aggregations
+  - Zoomed in: Individual locations with precise details
+- **Visit Analytics**: Each marker displays:
+  - Total visits and unique days visited
+  - Longest consecutive visit streak
+  - First and last visit dates
+  - Semantic location type from Google ("Home", "Work", "Activity", etc.)
+- **Performance Optimized**: Handles large datasets with spatial indexing and configurable marker limits
+- **Synchronized Filtering**: Markers update automatically with time-based filters
+
 ### Time-Based Filtering & Animation
 - **Three visualization modes**:
   - **Static Mode**: View all your location data at once (original behavior)
@@ -23,15 +36,22 @@ The script is designed to be highly configurable, efficient with large data file
 - **Real-time Statistics**: See point counts and date ranges for current view
 
 ### Enhanced Configuration
-All time-filtering features are configurable through the `CONFIG` dictionary:
+All features are configurable through the `CONFIG` dictionary:
 ```python
+# Time Filtering
 "ENABLE_TIME_FILTER": True,
 "TIME_GROUPING": "monthly",        # or "yearly"
 "TIME_FILTER_MODE": "static",      # "static", "daterange", or "animation"
 "ANIMATION_SPEED": 100,            # milliseconds per frame
 "ANIMATION_LOOP": False,
 "SMOOTH_TRANSITIONS": True,
-"INTERPOLATE_MISSING_TIMESTAMPS": True,
+
+# Location Markers
+"ENABLE_MARKERS": True,
+"MARKERS_VISIBLE_BY_DEFAULT": True,
+"MAX_MARKERS": 5000,               # Performance limit
+"MARKER_CLUSTER_RADIUS": 50,
+"MARKER_MIN_VISITS": 1,
 ```
 
 ## Original Features
@@ -90,7 +110,13 @@ All time-filtering features are configurable through the `CONFIG` dictionary:
 - **Max Intensity**: A powerful setting for tuning the map's "sensitivity". A **lower** value makes the map appear "hotter" with less data, ideal for sparse histories. A **higher** value requires a greater concentration of data to show "hot" (red) areas.
 - **Heatmap Max Zoom**: An advanced setting that controls the zoom level at which the heatmap is rendered at its highest detail.
 
-### Time Filter Controls (New)
+### Location Marker Controls
+- **Show Location Markers**: Toggle clickable markers on/off (green dots and clusters)
+- **Click Individual Markers**: See detailed visit statistics for that location
+- **Click Clusters**: View aggregated statistics for all locations in that cluster
+- **Zoom In/Out**: Watch clusters automatically split or merge based on zoom level
+
+### Time Filter Controls
 - **Time Filter Mode**: Choose between Static (all data), Date Range (custom range), or Animation (auto-play through time)
 - **Time Grouping**: Switch between monthly and yearly time periods
 - **Date Range Selectors**: Pick start and end months/years for custom date ranges
@@ -107,7 +133,7 @@ This is an enhanced fork of the original [timeline_google-maps](https://github.c
 
 **Original Author**: Rubens Braz ([rubensbrazf@gmail.com](mailto:rubensbrazf@gmail.com))
 
-**Enhancements**: Time-based filtering, animation system, and enhanced UI controls
+**Enhancements**: Interactive location markers with visit statistics, time-based filtering, animation system, and enhanced UI controls
 
 ## License
 

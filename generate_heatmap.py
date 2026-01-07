@@ -63,6 +63,14 @@ CONFIG = {
     "SMOOTH_TRANSITIONS": True,              # Enable smooth blend transitions between periods
     "INTERPOLATE_MISSING_TIMESTAMPS": True,  # Interpolate timestamps for path points
 
+    # --- Marker Layer Settings ---
+    "ENABLE_MARKERS": True,                # Enable clickable location markers with visit statistics
+    "MARKERS_VISIBLE_BY_DEFAULT": True,    # Show markers on page load
+    "MAX_MARKERS": 5000,                   # Maximum markers to render (performance limit)
+    "MARKER_CLUSTER_RADIUS": 50,           # Clustering distance in pixels
+    "MARKER_MIN_VISITS": 1,                # Only show locations with N+ visits
+    "INCLUDE_PATH_IN_MARKERS": False,      # Whether to include raw path points in markers (not recommended)
+
     # --- Execution Settings ---
     "AUTO_OPEN_IN_BROWSER": True, # Set to True to automatically open the HTML file after generation.
 }
@@ -96,6 +104,9 @@ HTML_TEMPLATE = """
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Marker Clustering Plugin -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
         html, body {
             height: 100%;
@@ -183,6 +194,57 @@ HTML_TEMPLATE = """
             font-weight: normal;
             color: #111;
         }
+
+        /* Marker Popup Styling */
+        .location-popup {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .location-popup h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 5px;
+        }
+        .location-popup .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .location-popup .stat-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .location-popup .stat-value {
+            color: #333;
+        }
+        .location-popup .coordinates {
+            font-size: 11px;
+            color: #888;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+
+        /* Custom cluster icons */
+        .marker-cluster-small {
+            background-color: rgba(181, 226, 140, 0.6);
+        }
+        .marker-cluster-small div {
+            background-color: rgba(110, 204, 57, 0.6);
+        }
+        .marker-cluster-medium {
+            background-color: rgba(241, 211, 87, 0.6);
+        }
+        .marker-cluster-medium div {
+            background-color: rgba(240, 194, 12, 0.6);
+        }
+        .marker-cluster-large {
+            background-color: rgba(253, 156, 115, 0.6);
+        }
+        .marker-cluster-large div {
+            background-color: rgba(241, 128, 23, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -212,6 +274,17 @@ HTML_TEMPLATE = """
             <div class="control-group">
                 <label for="maxZoom">Heatmap Max Zoom <span id="maxZoomValue" class="value-display"></span></label>
                 <input type="range" id="maxZoom" min="1" max="18" step="1">
+            </div>
+
+            <!-- Marker Layer Controls -->
+            <div class="control-group" id="markerToggleControl">
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="showMarkersToggle" style="width: auto;" checked>
+                    <span>Show Location Markers</span>
+                </label>
+                <div id="markerStats" style="font-size: 12px; color: #666; margin-top: 5px;">
+                    <!-- Populated dynamically with marker counts -->
+                </div>
             </div>
 
             <!-- Time Filtering Controls -->
@@ -275,11 +348,13 @@ HTML_TEMPLATE = """
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script>
         // --- Data and Configuration Injected by Python ---
         const locationData = %(LOCATIONS_DATA)s;
         const initialHeatOptions = %(HEATMAP_OPTIONS)s;
         const timeConfig = %(TIME_CONFIG)s;
+        const markerConfig = %(MARKER_CONFIG)s;
         const mapCenter = %(MAP_CENTER)s;
         const mapZoom = %(MAP_ZOOM)s;
         const initialMapStyle = '%(INITIAL_MAP_STYLE)s';
@@ -292,7 +367,255 @@ HTML_TEMPLATE = """
             attribution: mapAttributions[initialMapStyle],
             maxZoom: 19
         }).addTo(map);
-        const heatLayer = L.heatLayer(locationData, initialHeatOptions).addTo(map);
+
+        // Transform location data for heatmap (extract [lat, lon])
+        const heatmapData = locationData.map(p => [p.lat, p.lon]);
+        const heatLayer = L.heatLayer(heatmapData, initialHeatOptions).addTo(map);
+
+        // --- Marker Layer Logic ---
+        let markerClusterGroup = null;
+        let markersEnabled = markerConfig.visibleByDefault;
+        const spatialIndex = new Map(); // key: "lat,lon" -> array of point objects
+
+        function buildSpatialIndex(data) {
+            spatialIndex.clear();
+            data.forEach(point => {
+                // Skip raw path points for markers unless configured to include them
+                if (point.source === 'path' && !markerConfig.includePathInMarkers) return;
+
+                // Round to 4 decimal places (~11 meters precision)
+                const gridKey = `${point.lat.toFixed(4)},${point.lon.toFixed(4)}`;
+
+                if (!spatialIndex.has(gridKey)) {
+                    spatialIndex.set(gridKey, []);
+                }
+                spatialIndex.get(gridKey).push(point);
+            });
+        }
+
+        function calculateVisitStats(points) {
+            const totalVisits = points.length;
+
+            // Extract unique dates (YYYY-MM-DD format)
+            const uniqueDates = new Set();
+            points.forEach(p => {
+                if (p.timestamp) {
+                    const date = new Date(p.timestamp);
+                    const dateKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                    uniqueDates.add(dateKey);
+                }
+            });
+
+            // Calculate consecutive day streaks
+            const sortedDates = Array.from(uniqueDates).sort();
+            let maxStreak = 0;
+            let currentStreak = 0;
+            let prevDate = null;
+
+            sortedDates.forEach(dateStr => {
+                const currentDate = new Date(dateStr);
+
+                if (prevDate) {
+                    const dayDiff = Math.round((currentDate - prevDate) / (1000 * 60 * 60 * 24));
+                    if (dayDiff === 1) {
+                        currentStreak++;
+                    } else {
+                        maxStreak = Math.max(maxStreak, currentStreak);
+                        currentStreak = 1;
+                    }
+                } else {
+                    currentStreak = 1;
+                }
+
+                prevDate = currentDate;
+            });
+            maxStreak = Math.max(maxStreak, currentStreak);
+
+            // Get semantic type (prioritize most confident visit)
+            let bestSemanticType = 'Unknown Location';
+            let highestProb = 0;
+            points.forEach(p => {
+                if (p.semanticType && p.probability > highestProb) {
+                    bestSemanticType = p.semanticType;
+                    highestProb = p.probability;
+                }
+            });
+
+            // Fallback: if no semantic type found, use the first non-null one
+            if (bestSemanticType === 'Unknown Location') {
+                for (let p of points) {
+                    if (p.semanticType) {
+                        bestSemanticType = p.semanticType;
+                        break;
+                    }
+                }
+            }
+
+            // Get first and last visit dates
+            const timestamps = points.map(p => p.timestamp).filter(t => t).sort((a, b) => a - b);
+            const firstVisit = timestamps.length > 0 ? new Date(timestamps[0]).toLocaleDateString() : 'Unknown';
+            const lastVisit = timestamps.length > 0 ? new Date(timestamps[timestamps.length - 1]).toLocaleDateString() : 'Unknown';
+
+            return {
+                totalVisits,
+                uniqueDays: uniqueDates.size,
+                maxConsecutiveDays: maxStreak,
+                semanticType: bestSemanticType,
+                firstVisit,
+                lastVisit,
+                avgLat: points.reduce((sum, p) => sum + p.lat, 0) / points.length,
+                avgLon: points.reduce((sum, p) => sum + p.lon, 0) / points.length
+            };
+        }
+
+        function createPopupContent(stats) {
+            return `
+                <div class="location-popup">
+                    <h4>${stats.semanticType}</h4>
+                    <div class="stat-row">
+                        <span class="stat-label">Total Visits:</span>
+                        <span class="stat-value">${stats.totalVisits}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Unique Days:</span>
+                        <span class="stat-value">${stats.uniqueDays}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Longest Streak:</span>
+                        <span class="stat-value">${stats.maxConsecutiveDays} day${stats.maxConsecutiveDays !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">First Visit:</span>
+                        <span class="stat-value">${stats.firstVisit}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Last Visit:</span>
+                        <span class="stat-value">${stats.lastVisit}</span>
+                    </div>
+                    <div class="coordinates">
+                        ${stats.avgLat.toFixed(6)}, ${stats.avgLon.toFixed(6)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMarkerLayer(data) {
+            // Remove existing marker layer if present
+            if (markerClusterGroup) {
+                map.removeLayer(markerClusterGroup);
+            }
+
+            // Build spatial index from data
+            buildSpatialIndex(data);
+
+            // Create new cluster group
+            markerClusterGroup = L.markerClusterGroup({
+                maxClusterRadius: markerConfig.clusterRadius,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: false,  // We'll handle clicks manually for aggregation
+                iconCreateFunction: function(cluster) {
+                    const count = cluster.getChildCount();
+                    let className = 'marker-cluster-';
+                    if (count < 10) {
+                        className += 'small';
+                    } else if (count < 100) {
+                        className += 'medium';
+                    } else {
+                        className += 'large';
+                    }
+
+                    return L.divIcon({
+                        html: '<div><span>' + count + '</span></div>',
+                        className: 'marker-cluster ' + className,
+                        iconSize: L.point(40, 40)
+                    });
+                }
+            });
+
+            // Apply marker limit for performance
+            let entriesToProcess = Array.from(spatialIndex.entries());
+            if (entriesToProcess.length > markerConfig.maxMarkers) {
+                // Sample evenly to stay under limit
+                const step = Math.ceil(entriesToProcess.length / markerConfig.maxMarkers);
+                entriesToProcess = entriesToProcess.filter((_, index) => index % step === 0);
+            }
+
+            // Create markers from spatial index
+            entriesToProcess.forEach(([gridKey, points]) => {
+                if (points.length < markerConfig.minVisits) return;
+
+                const stats = calculateVisitStats(points);
+
+                // Create marker at average position
+                const marker = L.marker([stats.avgLat, stats.avgLon], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="background-color: #4CAF50; border-radius: 50%; width: 10px; height: 10px; border: 2px solid white;"></div>`,
+                        iconSize: [10, 10]
+                    })
+                });
+
+                // Bind popup
+                marker.bindPopup(createPopupContent(stats), {
+                    maxWidth: 300,
+                    closeButton: true
+                });
+
+                markerClusterGroup.addLayer(marker);
+            });
+
+            // Handle cluster clicks for aggregation
+            markerClusterGroup.on('clusterclick', function(event) {
+                const cluster = event.layer;
+                const childMarkers = cluster.getAllChildMarkers();
+
+                // Limit aggregation for performance
+                if (childMarkers.length > 500) {
+                    // Just zoom in instead of aggregating
+                    cluster.zoomToBounds();
+                    return;
+                }
+
+                // Aggregate all points from all markers in cluster
+                let allPoints = [];
+                childMarkers.forEach(marker => {
+                    const latLng = marker.getLatLng();
+                    const gridKey = `${latLng.lat.toFixed(4)},${latLng.lng.toFixed(4)}`;
+                    if (spatialIndex.has(gridKey)) {
+                        allPoints = allPoints.concat(spatialIndex.get(gridKey));
+                    }
+                });
+
+                const aggregateStats = calculateVisitStats(allPoints);
+                aggregateStats.semanticType = `${childMarkers.length} Locations`;
+
+                // Show popup at cluster position
+                L.popup()
+                    .setLatLng(cluster.getLatLng())
+                    .setContent(createPopupContent(aggregateStats))
+                    .openOn(map);
+            });
+
+            // Add to map if enabled
+            if (markersEnabled) {
+                map.addLayer(markerClusterGroup);
+                // Ensure heatmap stays behind markers
+                heatLayer.bringToBack();
+            }
+
+            // Update stats display
+            updateMarkerStats();
+        }
+
+        function updateMarkerStats() {
+            const statsDiv = document.getElementById('markerStats');
+            if (markerClusterGroup) {
+                const markerCount = markerClusterGroup.getLayers().length;
+                const locationCount = spatialIndex.size;
+                statsDiv.textContent = `${markerCount} markers representing ${locationCount} unique locations`;
+            }
+        }
 
         // --- Controls Logic ---
         const controls = document.getElementById('controls');
@@ -416,19 +739,21 @@ HTML_TEMPLATE = """
             const groups = new Map();
 
             data.forEach(point => {
-                if (point.length < 3 || !point[2]) return; // Skip points without timestamps
+                if (!point.timestamp) return; // Skip points without timestamps
 
-                const periodKey = getPeriodKey(point[2], grouping);
+                const periodKey = getPeriodKey(point.timestamp, grouping);
                 if (!periodKey) return;
 
                 if (!groups.has(periodKey)) {
                     groups.set(periodKey, {
                         key: periodKey,
-                        timestamp: point[2],
-                        points: []
+                        timestamp: point.timestamp,
+                        points: [],  // For heatmap (just [lat, lon])
+                        fullData: []  // For markers (full point objects)
                     });
                 }
-                groups.get(periodKey).points.push([point[0], point[1]]);
+                groups.get(periodKey).points.push([point.lat, point.lon]);
+                groups.get(periodKey).fullData.push(point);
             });
 
             // Convert to sorted array
@@ -453,22 +778,46 @@ HTML_TEMPLATE = """
 
             if (mode === 'static' || timePeriods.length === 0) {
                 // Show all data
-                setHeatmapData(locationData.map(p => [p[0], p[1]]), 'All Time', locationData.length);
+                setHeatmapData(locationData.map(p => [p.lat, p.lon]), 'All Time', locationData.length);
+                // Update markers with all data
+                if (markerConfig.enabled) {
+                    try {
+                        createMarkerLayer(locationData);
+                    } catch (error) {
+                        console.error('Error updating markers:', error);
+                    }
+                }
             } else if (mode === 'daterange' && showingFullRange) {
                 // Date Range mode: show ALL data in the selected range
-                const points = filteredDataForRange.map(p => [p[0], p[1]]);
+                const points = filteredDataForRange.map(p => [p.lat, p.lon]);
                 const startMonth = parseInt(startMonthSelect.value);
                 const startYear = parseInt(startYearSelect.value);
                 const endMonth = parseInt(endMonthSelect.value);
                 const endYear = parseInt(endYearSelect.value);
                 const label = `${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`;
                 setHeatmapData(points, label, filteredDataForRange.length);
+                // Update markers with filtered range data
+                if (markerConfig.enabled) {
+                    try {
+                        createMarkerLayer(filteredDataForRange);
+                    } catch (error) {
+                        console.error('Error updating markers:', error);
+                    }
+                }
             } else {
                 // Animation mode OR Date Range mode with slider drill-down: show data for current period
                 const period = timePeriods[currentPeriodIndex];
                 if (period) {
                     const label = formatPeriod(period.timestamp, timeGroupingSelect.value);
                     setHeatmapData(period.points, label, period.points.length);
+                    // Update markers with period data
+                    if (markerConfig.enabled) {
+                        try {
+                            createMarkerLayer(period.fullData);
+                        } catch (error) {
+                            console.error('Error updating markers:', error);
+                        }
+                    }
                 }
             }
         }
@@ -546,9 +895,9 @@ HTML_TEMPLATE = """
             let maxTimestamp = -Infinity;
 
             locationData.forEach(point => {
-                if (point[2]) {
-                    minTimestamp = Math.min(minTimestamp, point[2]);
-                    maxTimestamp = Math.max(maxTimestamp, point[2]);
+                if (point.timestamp) {
+                    minTimestamp = Math.min(minTimestamp, point.timestamp);
+                    maxTimestamp = Math.max(maxTimestamp, point.timestamp);
                 }
             });
 
@@ -613,8 +962,8 @@ HTML_TEMPLATE = """
 
             // Filter data by date range
             const filteredData = locationData.filter(point => {
-                if (!point[2]) return false;
-                const pointDate = new Date(point[2]);
+                if (!point.timestamp) return false;
+                const pointDate = new Date(point.timestamp);
                 return pointDate >= startDate && pointDate <= endDate;
             });
 
@@ -797,6 +1146,23 @@ HTML_TEMPLATE = """
             }
         }
 
+        // --- Marker Toggle Event Listener ---
+        if (markerConfig.enabled) {
+            document.getElementById('showMarkersToggle').addEventListener('change', (e) => {
+                markersEnabled = e.target.checked;
+                if (markersEnabled) {
+                    if (markerClusterGroup) {
+                        map.addLayer(markerClusterGroup);
+                        heatLayer.bringToBack();
+                    }
+                } else {
+                    if (markerClusterGroup) {
+                        map.removeLayer(markerClusterGroup);
+                    }
+                }
+            });
+        }
+
         // --- Initialization ---
         Object.keys(mapStyles).forEach(styleName => {
             const option = document.createElement('option');
@@ -806,6 +1172,20 @@ HTML_TEMPLATE = """
         });
         mapStyleSelect.value = initialMapStyle;
         setInitialControlValues();
+
+        // --- Initialize Marker Layer (after controls are set up) ---
+        if (markerConfig.enabled) {
+            try {
+                createMarkerLayer(locationData);
+            } catch (error) {
+                console.error('Error initializing marker layer:', error);
+                // Hide marker control if initialization fails
+                document.getElementById('markerToggleControl').style.display = 'none';
+            }
+        } else {
+            // Hide the marker toggle control if markers are disabled
+            document.getElementById('markerToggleControl').style.display = 'none';
+        }
     </script>
 </body>
 </html>
@@ -869,7 +1249,16 @@ def _process_locations_format(file_handle):
             lon = loc['longitudeE7'] * E7
             # Extract timestamp
             timestamp = _parse_timestamp(loc.get('timestampMs') or loc.get('timestamp'))
-            points.append([lat, lon, timestamp])
+            # Old format doesn't have semantic metadata
+            points.append({
+                'lat': lat,
+                'lon': lon,
+                'timestamp': timestamp,
+                'placeID': None,
+                'semanticType': 'Location',  # Generic label for old format
+                'probability': 0.0,
+                'source': 'path'  # Old format is raw location data
+            })
         if (i + 1) % 50000 == 0:
             print(f"  [PROGRESS] {i+1:,} locations processed...")
     return points
@@ -904,28 +1293,63 @@ def _process_semantic_segments_format(file_handle, config):
                             # Interpolate timestamp based on position in path
                             progress = idx / max(len(timeline_path) - 1, 1)
                             point_time = int(start_time + (end_time - start_time) * progress)
-                        points.append([coords[0], coords[1], point_time])
+                        points.append({
+                            'lat': coords[0],
+                            'lon': coords[1],
+                            'timestamp': point_time,
+                            'placeID': None,
+                            'semanticType': None,
+                            'probability': 0.0,
+                            'source': 'path'
+                        })
 
             elif config["INCLUDE_VISITS"] and 'visit' in segment:
                 if lat_lng := segment.get('visit', {}).get('topCandidate', {}).get('placeLocation', {}).get('latLng'):
                     if coords := parse_lat_lng_string(lat_lng):
                         # Use visit start time or duration start time
+                        visit_data = segment.get('visit', {})
+                        top_candidate = visit_data.get('topCandidate', {})
                         timestamp = _parse_timestamp(
-                            segment.get('visit', {}).get('startTime') or
+                            visit_data.get('startTime') or
                             segment.get('startTime')
                         )
-                        points.append([coords[0], coords[1], timestamp])
+                        points.append({
+                            'lat': coords[0],
+                            'lon': coords[1],
+                            'timestamp': timestamp,
+                            'placeID': top_candidate.get('placeID'),
+                            'semanticType': top_candidate.get('semanticType', 'Unknown Location'),
+                            'probability': float(top_candidate.get('probability', 0)) if top_candidate.get('probability') else 0.0,
+                            'source': 'visit'
+                        })
 
             elif config["INCLUDE_ACTIVITIES"] and 'activity' in segment:
                 activity = segment.get('activity', {})
+                activity_type = activity.get('topCandidate', {}).get('type', 'Unknown')
                 if start_lat_lng := activity.get('start', {}).get('latLng'):
                     if coords := parse_lat_lng_string(start_lat_lng):
                         timestamp = _parse_timestamp(activity.get('start', {}).get('time') or segment.get('startTime'))
-                        points.append([coords[0], coords[1], timestamp])
+                        points.append({
+                            'lat': coords[0],
+                            'lon': coords[1],
+                            'timestamp': timestamp,
+                            'placeID': None,
+                            'semanticType': f'Activity ({activity_type})',
+                            'probability': 0.0,
+                            'source': 'activity'
+                        })
                 if end_lat_lng := activity.get('end', {}).get('latLng'):
                     if coords := parse_lat_lng_string(end_lat_lng):
                         timestamp = _parse_timestamp(activity.get('end', {}).get('time') or segment.get('endTime'))
-                        points.append([coords[0], coords[1], timestamp])
+                        points.append({
+                            'lat': coords[0],
+                            'lon': coords[1],
+                            'timestamp': timestamp,
+                            'placeID': None,
+                            'semanticType': f'Activity ({activity_type})',
+                            'probability': 0.0,
+                            'source': 'activity'
+                        })
         except Exception:
             print(f"\n[WARNING] Error processing segment #{i+1}. Skipping.")
             continue
@@ -946,12 +1370,23 @@ def _process_timeline_objects_format(file_handle, config):
                 place_visit = t_object.get('placeVisit', {})
                 if location := place_visit.get('location', {}):
                     if 'latitudeE7' in location and 'longitudeE7' in location:
-                        # Extract timestamp from duration
+                        # Extract timestamp and metadata from duration
                         timestamp = _parse_timestamp(
                             place_visit.get('duration', {}).get('startTimestamp') or
                             place_visit.get('duration', {}).get('startTimestampMs')
                         )
-                        points.append([location['latitudeE7'] * E7, location['longitudeE7'] * E7, timestamp])
+                        # iOS format may have semanticType in location
+                        semantic_type = location.get('semanticType') or place_visit.get('semanticType', 'Unknown Location')
+                        place_id = location.get('placeId') or place_visit.get('placeId')
+                        points.append({
+                            'lat': location['latitudeE7'] * E7,
+                            'lon': location['longitudeE7'] * E7,
+                            'timestamp': timestamp,
+                            'placeID': place_id,
+                            'semanticType': semantic_type,
+                            'probability': 0.0,  # iOS format doesn't provide probability
+                            'source': 'visit'
+                        })
 
             elif config["INCLUDE_ACTIVITIES"] and 'activitySegment' in t_object:
                 segment = t_object.get('activitySegment', {})
@@ -963,14 +1398,31 @@ def _process_timeline_objects_format(file_handle, config):
                     segment.get('duration', {}).get('endTimestamp') or
                     segment.get('duration', {}).get('endTimestampMs')
                 )
+                activity_type = segment.get('activityType', 'Unknown')
 
                 if start_loc := segment.get('startLocation'):
                     if 'latitudeE7' in start_loc and 'longitudeE7' in start_loc:
-                        points.append([start_loc['latitudeE7'] * E7, start_loc['longitudeE7'] * E7, start_time])
+                        points.append({
+                            'lat': start_loc['latitudeE7'] * E7,
+                            'lon': start_loc['longitudeE7'] * E7,
+                            'timestamp': start_time,
+                            'placeID': None,
+                            'semanticType': f'Activity ({activity_type})',
+                            'probability': 0.0,
+                            'source': 'activity'
+                        })
 
                 if end_loc := segment.get('endLocation'):
                     if 'latitudeE7' in end_loc and 'longitudeE7' in end_loc:
-                        points.append([end_loc['latitudeE7'] * E7, end_loc['longitudeE7'] * E7, end_time])
+                        points.append({
+                            'lat': end_loc['latitudeE7'] * E7,
+                            'lon': end_loc['longitudeE7'] * E7,
+                            'timestamp': end_time,
+                            'placeID': None,
+                            'semanticType': f'Activity ({activity_type})',
+                            'probability': 0.0,
+                            'source': 'activity'
+                        })
 
                 if config["INCLUDE_RAW_PATH"] and (raw_path := segment.get('simplifiedRawPath')):
                     raw_points = raw_path.get('points', [])
@@ -981,7 +1433,15 @@ def _process_timeline_objects_format(file_handle, config):
                             if config["INTERPOLATE_MISSING_TIMESTAMPS"] and start_time and end_time:
                                 progress = idx / max(len(raw_points) - 1, 1)
                                 point_time = int(start_time + (end_time - start_time) * progress)
-                            points.append([point['latE7'] * E7, point['lngE7'] * E7, point_time])
+                            points.append({
+                                'lat': point['latE7'] * E7,
+                                'lon': point['lngE7'] * E7,
+                                'timestamp': point_time,
+                                'placeID': None,
+                                'semanticType': None,
+                                'probability': 0.0,
+                                'source': 'path'
+                            })
         except Exception:
             print(f"\n[WARNING] Error processing timeline object #{i+1}. Skipping.")
             continue
@@ -1015,12 +1475,22 @@ def _process_root_array_format(file_handle, config):
             if config["INCLUDE_VISITS"] and 'visit' in record:
                 if lat_lng := record.get('visit', {}).get('topCandidate', {}).get('placeLocation'):
                     if coords := parse_lat_lng_string(lat_lng):
-                        # Extract timestamp from visit
+                        # Extract timestamp and metadata from visit
+                        visit_data = record.get('visit', {})
+                        top_candidate = visit_data.get('topCandidate', {})
                         timestamp = _parse_timestamp(
                             record.get('visit', {}).get('startTime') or
                             record.get('startTime')
                         )
-                        points.append([coords[0], coords[1], timestamp])
+                        points.append({
+                            'lat': coords[0],
+                            'lon': coords[1],
+                            'timestamp': timestamp,
+                            'placeID': top_candidate.get('placeID'),
+                            'semanticType': top_candidate.get('semanticType', 'Unknown Location'),
+                            'probability': float(top_candidate.get('probability', 0)) if top_candidate.get('probability') else 0.0,
+                            'source': 'visit'
+                        })
 
             # Check if the object is an 'activity'.
             elif config["INCLUDE_ACTIVITIES"] and 'activity' in record:
@@ -1030,13 +1500,31 @@ def _process_root_array_format(file_handle, config):
                         activity.get('startTime') or
                         record.get('startTime')
                     )
-                    points.append([start_coords[0], start_coords[1], timestamp])
+                    activity_type = activity.get('topCandidate', {}).get('type', 'Unknown')
+                    points.append({
+                        'lat': start_coords[0],
+                        'lon': start_coords[1],
+                        'timestamp': timestamp,
+                        'placeID': None,
+                        'semanticType': f'Activity ({activity_type})',
+                        'probability': 0.0,
+                        'source': 'activity'
+                    })
                 if end_coords := parse_lat_lng_string(activity.get('end')):
                     timestamp = _parse_timestamp(
                         activity.get('endTime') or
                         record.get('endTime')
                     )
-                    points.append([end_coords[0], end_coords[1], timestamp])
+                    activity_type = activity.get('topCandidate', {}).get('type', 'Unknown')
+                    points.append({
+                        'lat': end_coords[0],
+                        'lon': end_coords[1],
+                        'timestamp': timestamp,
+                        'placeID': None,
+                        'semanticType': f'Activity ({activity_type})',
+                        'probability': 0.0,
+                        'source': 'activity'
+                    })
 
         except Exception:
             # If an error occurs processing a single record, skip it and continue.
@@ -1140,6 +1628,16 @@ def create_html_file(config, points):
         "smoothTransitions": config["SMOOTH_TRANSITIONS"]
     })
 
+    # Prepare marker layer configuration for JavaScript injection.
+    marker_config_js = json.dumps({
+        "enabled": config["ENABLE_MARKERS"],
+        "visibleByDefault": config["MARKERS_VISIBLE_BY_DEFAULT"],
+        "maxMarkers": config["MAX_MARKERS"],
+        "clusterRadius": config["MARKER_CLUSTER_RADIUS"],
+        "minVisits": config["MARKER_MIN_VISITS"],
+        "includePathInMarkers": config["INCLUDE_PATH_IN_MARKERS"]
+    })
+
     # Pass the map style dictionaries to JavaScript.
     map_styles_js = json.dumps(MAP_STYLE_URLS)
     map_attributions_js = json.dumps(MAP_ATTRIBUTIONS)
@@ -1150,6 +1648,7 @@ def create_html_file(config, points):
         .replace("%(LOCATIONS_DATA)s", json.dumps(points))
         .replace("%(HEATMAP_OPTIONS)s", heatmap_options_js)
         .replace("%(TIME_CONFIG)s", time_config_js)
+        .replace("%(MARKER_CONFIG)s", marker_config_js)
         .replace("%(MAP_CENTER)s", str(config["MAP_INITIAL_CENTER"]))
         .replace("%(MAP_ZOOM)s", str(config["MAP_INITIAL_ZOOM"]))
         .replace("%(INITIAL_MAP_STYLE)s", config["MAP_STYLE"])

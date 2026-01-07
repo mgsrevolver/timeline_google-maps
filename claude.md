@@ -1,239 +1,148 @@
-# Time-Based Heatmap Filtering Implementation Plan
+# Google Location History Heatmap - Enhanced Features
 
-## Goal
-Add interactive date range filtering to the location history heatmap, allowing users to visualize their location data over specific time periods with animation capabilities.
+Enhanced fork of timeline_google-maps with interactive time-based filtering and clickable location markers.
 
-## Current State
-- Script uses Leaflet.js with custom HTML template
-- Has beautiful collapsible controls panel with live sliders
-- Supports multiple data formats (locations, semanticSegments, timelineObjects, root array)
-- Currently displays ALL location data at once (no time filtering)
+## Feature Overview
 
-## Implementation Approach
+### 1. Interactive Location Markers (✓ Implemented)
+Clickable markers with detailed visit statistics, leveraging Google's semantic metadata that was previously discarded.
 
-### 1. Data Extraction Changes (Python)
-**File:** `generate_heatmap.py`
+**Key Components:**
+- **Data Preservation**: All parsers modified to capture `placeID`, `semanticType`, `probability`, and `source`
+- **Spatial Indexing**: Points grouped by ~11m grid cells for efficient clustering
+- **Leaflet.markercluster**: Automatic zoom-based clustering with aggregation
+- **Visit Analytics**: Total visits, unique days, consecutive streaks, semantic labels
 
-#### Modify Parser Functions
-Each parser function needs to extract timestamps alongside coordinates:
-- `_process_locations_format()` - Extract `timestamp` or `timestampMs`
-- `_process_semantic_segments_format()` - Extract from visit/activity start/end times
-- `_process_timeline_objects_format()` - Extract from placeVisit/activitySegment duration
-- `_process_root_array_format()` - Extract from visit/activity timestamps
-
-#### Data Structure Change
-**Current:** `points = [[lat, lon], [lat, lon], ...]`
-**New:** `points = [[lat, lon, timestamp], [lat, lon, timestamp], ...]`
-
-Where timestamp is Unix epoch milliseconds (JavaScript-compatible)
-
-#### Add Configuration Options
+**Configuration:**
 ```python
-CONFIG = {
-    # ... existing config ...
-
-    # --- Time Filtering Settings ---
-    "ENABLE_TIME_FILTER": True,
-    "TIME_GROUPING": "monthly",     # Options: 'monthly', 'yearly'
-    "TIME_FILTER_MODE": "static",   # Options: 'static', 'animation', 'manual'
-    "ANIMATION_SPEED": 1000,        # Milliseconds per frame when animating
-    "ANIMATION_LOOP": False,        # Whether to loop animation
-    "INTERPOLATE_MISSING_TIMESTAMPS": True,  # Interpolate timestamps for path points
-}
+"ENABLE_MARKERS": True,
+"MARKERS_VISIBLE_BY_DEFAULT": True,
+"MAX_MARKERS": 5000,
+"MARKER_CLUSTER_RADIUS": 50,
+"MARKER_MIN_VISITS": 1,
+"INCLUDE_PATH_IN_MARKERS": False,
 ```
 
-### 2. HTML/JavaScript Changes
+**Performance:**
+- Spatial index for O(1) lookups
+- Marker decimation when exceeding MAX_MARKERS
+- Cluster click aggregation limited to 500 markers
+- Error handling prevents marker failures from breaking controls
 
-#### Add Time Controls to Control Panel
-Add new control groups in the `#controls-content` div:
-```html
-<div class="control-group">
-    <label for="timeFilterMode">Time Filter Mode</label>
-    <select id="timeFilterMode">
-        <option value="static">Static (All Data)</option>
-        <option value="manual">Manual (Slider)</option>
-        <option value="animation">Animation</option>
-    </select>
-</div>
+### 2. Time-Based Filtering & Animation (✓ Implemented)
+Dynamic visualization of location history across time periods with smooth transitions.
 
-<div class="control-group" id="timeGroupingControl">
-    <label for="timeGrouping">Time Grouping</label>
-    <select id="timeGrouping">
-        <option value="monthly">Monthly</option>
-        <option value="yearly">Yearly</option>
-    </select>
-</div>
+**Modes:**
+- **Static**: Show all data (default)
+- **Date Range**: Custom time window with drill-down slider
+- **Animation**: Auto-play through time with configurable speed
 
-<div class="control-group" id="timeSliderControl">
-    <label for="timeSlider">Timeline <span id="currentPeriod" class="value-display"></span></label>
-    <input type="range" id="timeSlider" min="0" max="100" step="1">
-</div>
-
-<div class="control-group" id="animationControls">
-    <div class="playback-controls">
-        <button id="playPause">▶️ Play</button>
-        <button id="stepBack">⏮️</button>
-        <button id="stepForward">⏭️</button>
-    </div>
-    <label>
-        <input type="checkbox" id="loopAnimation"> Loop Animation
-    </label>
-    <label for="animationSpeed">Speed <span id="animationSpeedValue" class="value-display"></span>ms</label>
-    <input type="range" id="animationSpeed" min="100" max="5000" step="100">
-</div>
-
-<div class="control-group" id="dataStats">
-    <span id="pointCount" class="value-display"></span>
-</div>
+**Configuration:**
+```python
+"ENABLE_TIME_FILTER": True,
+"TIME_GROUPING": "monthly",
+"TIME_FILTER_MODE": "static",
+"ANIMATION_SPEED": 100,
+"ANIMATION_LOOP": False,
+"SMOOTH_TRANSITIONS": True,
+"INTERPOLATE_MISSING_TIMESTAMPS": True,
 ```
 
-#### JavaScript Data Processing
-1. **Parse time-stamped data** on page load
-2. **Group data by time periods** (monthly/yearly based on selection)
-3. **Create time index** for slider navigation
-4. **Filter visible points** based on selected time period (window view)
-5. **Implement animation** with play/pause/loop controls
-6. **Toggle control visibility** based on selected mode (static/manual/animation)
+**Integration:**
+- Markers automatically sync with time filter changes
+- Smooth blend transitions between periods (8 frames, 30ms each)
+- Data grouped by period includes both heatmap points and full marker data
 
-#### Core Functions Needed
+## Data Structure
+
+**Current Format:**
 ```javascript
-// Group location data by time periods
-function groupDataByTimePeriod(data, grouping) { ... }
-
-// Filter data based on date range
-function filterDataByDateRange(data, startDate, endDate) { ... }
-
-// Update heatmap with filtered data
-function updateHeatmapData(filteredData) { ... }
-
-// Animation controller
-function playAnimation() { ... }
-function stopAnimation() { ... }
+locationData = [
+    {
+        lat: float,
+        lon: float,
+        timestamp: int,        // Unix epoch milliseconds
+        placeID: string,       // Google Places ID
+        semanticType: string,  // "Inferred Home", "Work", etc.
+        probability: float,    // Confidence score
+        source: string         // "visit", "activity", "path"
+    },
+    ...
+]
 ```
 
-### 3. UI/UX Considerations
+**Backward Compatibility:**
+- Heatmap layer extracts `[lat, lon]` from objects
+- Time filtering groups include both `points` (for heatmap) and `fullData` (for markers)
 
-#### Time Period Display
-- Show current time period in readable format (e.g., "January 2020")
-- Display total points in current view
-- Show date range summary
+## Architecture Notes
 
-#### Performance Optimization
-- Pre-compute time groups on load
-- Use efficient filtering (don't rebuild entire heatmap each frame)
-- Consider data decimation for very large datasets
+### Parser Functions (Python)
+All 4 formats preserve metadata:
+- `_process_locations_format()` - Old format (minimal metadata)
+- `_process_semantic_segments_format()` - Android format (rich metadata)
+- `_process_timeline_objects_format()` - iOS format
+- `_process_root_array_format()` - Direct array format
 
-#### Animation Features
-- Smooth transitions between time periods
-- Adjustable playback speed
-- Loop option
-- Frame-by-frame stepping
+### JavaScript Organization
+1. **Map Initialization** (lines 364-373): Create map, heatmap layer
+2. **Marker Layer** (lines 375-626): Spatial index, stats calculator, clustering
+3. **Controls Logic** (lines 628-690): UI event handlers
+4. **Time Filtering** (lines 691-1143): Period grouping, animation, date range
+5. **Initialization** (lines 1162-1176): Set defaults, create markers
 
-## Implementation Steps
+### Key Functions
+- `buildSpatialIndex(data)` - Group points by grid coordinates
+- `calculateVisitStats(points)` - Compute visit metrics
+- `createMarkerLayer(data)` - Build clustered markers
+- `groupDataByTimePeriod(data, grouping)` - Time-based data grouping
+- `updateHeatmapForCurrentPeriod()` - Sync heatmap and markers
 
-### Phase 1: Backend Data Processing
-1. Modify each parser function to extract timestamps
-2. Add timestamp normalization (handle different formats)
-3. Update data structure to include timestamps
-4. Add fallback handling for records without timestamps
+## Technical Decisions
 
-### Phase 2: Frontend Time Controls
-1. Add date range input controls to HTML
-2. Calculate min/max dates from data
-3. Implement date range filtering logic
-4. Update heatmap when date range changes
+### Spatial Indexing
+- **Precision**: 4 decimal places (~11m radius)
+- **Rationale**: Balance between grouping nearby points and distinguishing separate locations
+- **Performance**: O(1) lookup during marker creation and cluster aggregation
 
-### Phase 3: Timeline Slider & Animation
-1. Add timeline slider control
-2. Group data by time periods
-3. Implement slider-based time navigation
-4. Add play/pause functionality
-5. Add step forward/backward controls
+### Metadata Priority
+- **Semantic Type**: Highest probability wins; fallback to first non-null
+- **Visit vs Activity**: Activities have no placeID, labeled as "Activity (type)"
+- **Path Points**: Excluded from markers by default (configurable)
 
-### Phase 4: Polish & Optimization
-1. Add loading indicators for large datasets
-2. Optimize filtering performance
-3. Add visual feedback (point counts, date labels)
-4. Test with different data formats
-5. Add error handling for edge cases
+### Error Handling
+- Marker initialization wrapped in try-catch to protect controls
+- Time filter updates have isolated error handling
+- Console logging for debugging without breaking UI
 
-## Technical Challenges
+### Performance Limits
+- **Max Markers**: 5000 default (configurable)
+- **Cluster Aggregation**: 500 marker limit per cluster click
+- **Decimation**: Even sampling when exceeding limits
 
-### Challenge 1: Timestamp Format Variations
-Different Google Takeout formats use different timestamp representations:
-- `timestampMs` (string) - milliseconds since epoch
-- `timestamp` (string) - ISO 8601 format
-- `startTime`/`endTime` objects with various formats
+## Future Enhancements
 
-**Solution:** Create unified timestamp parser that handles all formats
+**Potential Features:**
+- Heatmap/marker layer toggle (currently always overlaid)
+- Custom marker colors by semantic type
+- Export visit statistics to CSV
+- Search/filter by location type
+- Visit duration tracking (requires parsing duration data)
+- Multi-select time ranges
+- Custom spatial index precision based on zoom level
 
-### Challenge 2: Missing Timestamps
-Some records may not have timestamps (especially in raw path data)
+**API Integration (Optional):**
+- Google Places API for place names using placeID
+- Google Street View thumbnails in popups
+- Reverse geocoding for activity points
 
-**Solution:**
-- Use segment-level timestamp for all points within that segment
-- Filter out points without timestamps, or
-- Interpolate timestamps for path points
+## File Structure
 
-### Challenge 3: Performance with Large Datasets
-Filtering millions of points on every slider change could be slow
+**Single File Architecture:**
+- All HTML, CSS, and JavaScript embedded in `generate_heatmap.py`
+- Output: Standalone `heatmap.html` (8-10MB with typical dataset)
+- No external dependencies beyond CDN libraries (Leaflet, Leaflet.heat, Leaflet.markercluster)
 
-**Solution:**
-- Pre-group data by time periods
-- Use efficient data structures (Map/Set)
-- Implement data decimation/clustering for dense areas
-- Consider Web Workers for heavy processing
-
-### Challenge 4: Smooth Heatmap Updates
-Leaflet.heat may flicker when updating data
-
-**Solution:**
-- Use `setLatLngs()` method instead of removing/re-adding layer
-- Batch updates to minimize redraws
-- Add CSS transitions for smoother visual changes
-
-## File Changes Summary
-
-### Modified Files
-- `generate_heatmap.py` - All parser functions + HTML template
-
-### New Files (Optional)
-- Could separate JavaScript into external file for cleaner code
-- Could add CSS file for time control styling
-
-## Next Steps
-1. Review this plan and confirm approach
-2. Decide on time grouping strategy (monthly vs weekly vs daily)
-3. Implement Phase 1 (backend data extraction)
-4. Test with sample data
-5. Proceed to frontend implementation
-
-## Implementation Decisions ✓
-
-### 1. Time Grouping
-**Decision:** Support **Monthly and Yearly** grouping
-- Format: MM/YY (e.g., "01/2020", "12/2023")
-- No specific date selection needed
-- User can toggle between monthly and yearly views
-
-### 2. View Mode
-**Decision:** **Window view**
-- Show only locations from the selected time period
-- Each time slice shows a discrete window of data
-- Better for identifying patterns in specific periods
-
-### 3. Missing Timestamps
-**Decision:** **Interpolate timestamps**
-- For points without timestamps, interpolate based on surrounding points
-- If in a segment with start/end times, distribute evenly across the segment
-- If no context available, skip the point
-
-### 4. Animation Behavior
-**Decision:** **Fully configurable modes**
-- **Static mode:** Show all data points (current behavior, default)
-- **Animation mode:** Play through time periods
-  - Play/Pause button
-  - Configurable loop option (on/off)
-  - Stop at end if loop is disabled
-- **Manual mode:** Use slider to scrub through time periods
-- Animation speed configurable in CONFIG
+**Dependencies:**
+- Python: `ijson` for streaming JSON parsing
+- JavaScript: Leaflet 1.9.4, Leaflet.heat 0.2.0, Leaflet.markercluster 1.5.3
