@@ -1145,24 +1145,81 @@
          */
         async function processRootArrayFormat(jsonData, progressCallback, cancelToken) {
             const points = [];
-            const chunkSize = 10000;
+            const totalItems = jsonData.length;
+            const chunkSize = 1000; // Smaller chunks for large files
 
-            for (let i = 0; i < jsonData.length; i += chunkSize) {
+            for (let i = 0; i < totalItems; i += chunkSize) {
                 if (cancelToken.cancelled) throw new Error('Processing cancelled');
 
-                const chunk = jsonData.slice(i, Math.min(i + chunkSize, jsonData.length));
+                const endIndex = Math.min(i + chunkSize, totalItems);
+                const chunk = jsonData.slice(i, endIndex);
 
                 for (const item of chunk) {
-                    let coords = null;
+                    // Check for semantic segments structure (visit/activity nested in root array)
+                    if (item.visit && item.visit.topCandidate) {
+                        const candidate = item.visit.topCandidate;
+                        const coords = parseLatLngString(candidate.placeLocation);
 
-                    if (item.latLng) {
+                        if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                            points.push({
+                                lat: coords.lat,
+                                lon: coords.lon,
+                                timestamp: parseTimestamp(item.startTime || item.visit.startTime),
+                                placeID: candidate.placeID || null,
+                                semanticType: candidate.semanticType || null,
+                                probability: parseFloat(candidate.probability) || null,
+                                source: 'visit'
+                            });
+                        }
+                    }
+
+                    // Check for activity segments
+                    if (item.activity && item.activity.start) {
+                        const activity = item.activity;
+                        const coords = parseLatLngString(activity.start);
+
+                        if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                            const activityType = activity.topCandidate?.type || 'UNKNOWN';
+                            points.push({
+                                lat: coords.lat,
+                                lon: coords.lon,
+                                timestamp: parseTimestamp(item.startTime || activity.startTime),
+                                placeID: null,
+                                semanticType: `Activity (${activityType})`,
+                                probability: activity.topCandidate?.probability ? parseFloat(activity.topCandidate.probability) : null,
+                                source: 'activity'
+                            });
+                        }
+
+                        // Process path waypoints
+                        if (activity.waypointPath && activity.waypointPath.waypoints) {
+                            for (const waypoint of activity.waypointPath.waypoints) {
+                                const waypointCoords = parseLatLngString(waypoint.latLng);
+                                if (waypointCoords && isValidCoordinate(waypointCoords.lat, waypointCoords.lon)) {
+                                    points.push({
+                                        lat: waypointCoords.lat,
+                                        lon: waypointCoords.lon,
+                                        timestamp: null,
+                                        placeID: null,
+                                        semanticType: null,
+                                        probability: null,
+                                        source: 'path'
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback: Check for direct coordinate formats
+                    let coords = null;
+                    if (!coords && item.latLng) {
                         coords = parseLatLngString(item.latLng);
-                    } else if (item.latitudeE7 && item.longitudeE7) {
+                    } else if (!coords && item.latitudeE7 && item.longitudeE7) {
                         coords = {
                             lat: e7ToDecimal(item.latitudeE7),
                             lon: e7ToDecimal(item.longitudeE7)
                         };
-                    } else if (item.lat && item.lon) {
+                    } else if (!coords && item.lat && item.lon) {
                         coords = { lat: item.lat, lon: item.lon };
                     }
 
