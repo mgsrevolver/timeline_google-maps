@@ -97,7 +97,7 @@ All features are configurable through the `CONFIG` dictionary:
 ### Step 2: Set Up the Environment
 
 1. **Clone the repository** or download the `generate_heatmap.py` script.
-2. **Place your `Records.json`** file in the same directory as the script.
+2. **Place your `records.json`** file in the same directory as the script.
 3. **Install the required Python package**:
    ```bash
    pip install -r requirements.txt

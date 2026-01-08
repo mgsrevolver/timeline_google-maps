@@ -1398,8 +1398,6 @@
             const totalItems = jsonData.length;
             const chunkSize = 1000; // Smaller chunks for large files
 
-            console.log(`Processing ${totalItems} items in root array format`);
-
             for (let i = 0; i < totalItems; i += chunkSize) {
                 if (cancelToken.cancelled) throw new Error('Processing cancelled');
 
@@ -1550,9 +1548,6 @@
                     throw new Error('Unsupported JSON format. Please upload a valid Google Location History file.');
                 }
 
-                console.log(`Detected format: ${format}`);
-                console.log(`Total records to process: ${Array.isArray(jsonData) ? jsonData.length : 'N/A'}`);
-
                 const progressCallback = (processed, total, status) => {
                     updateProgress(processed, total, status);
                 };
@@ -1581,8 +1576,6 @@
                 if (!points || points.length === 0) {
                     throw new Error('No valid location data found in file');
                 }
-
-                console.log(`Processed ${points.length} location points`);
 
                 appState.locationData = points;
 
@@ -1679,11 +1672,8 @@
          * Main map initialization function
          */
         function initMapView(locationData) {
-            console.log(`Initializing map with ${locationData.length} location points`);
-
             // Validate coordinates first
             const validData = validateCoordinates(locationData);
-            console.log(`Valid coordinates: ${validData.length} of ${locationData.length}`);
 
             if (validData.length === 0) {
                 throw new Error('No valid location data found');
@@ -1695,11 +1685,9 @@
 
             // Start with conservative zoom
             const mapZoom = Math.min(calculateZoomLevel(bounds), 10);
-            console.log(`Map center: ${mapCenter}, zoom: ${mapZoom}`);
 
             // Decimate heatmap data if very large
             const heatmapDataset = decimatePoints(validData, 10000);
-            console.log(`Heatmap will use ${heatmapDataset.length} points`);
 
             // Create configuration objects
             const initialHeatOptions = {
@@ -1761,11 +1749,9 @@
 
             // Transform location data for heatmap (extract [lat, lon])
             const heatmapData = heatmapDataset.map(p => [p.lat, p.lon]);
-            console.log(`Creating heatmap with ${heatmapData.length} points`);
 
             // Create and add heatmap layer
             const heatLayer = L.heatLayer(heatmapData, initialHeatOptions).addTo(map);
-            console.log('Heatmap added successfully');
 
             // --- Marker Layer Logic ---
             let markerClusterGroup = null;
@@ -2306,8 +2292,6 @@
                         sliderHint.textContent = 'Use slider to drill down into individual periods';
                     }
 
-                    console.log(`Date range applied: ${monthNames[startMonth]} ${startYear} - ${monthNames[endMonth]} ${endYear}`);
-                    console.log(`Showing ${filteredData.length} total points across ${timePeriods.length} time periods`);
                 }
             }
 
@@ -2499,8 +2483,6 @@
             } else {
                 document.getElementById('markerToggleControl').style.display = 'none';
             }
-
-            console.log('Map initialization complete');
         }
 
         /* ============================================
@@ -2540,9 +2522,6 @@
                     handleFileUpload(e.target.files[0]);
                 }
             });
-
-            console.log('Google Location History Visualizer loaded');
-            console.log('Mobile device:', detectMobile());
         });
     </script>
 </body>
