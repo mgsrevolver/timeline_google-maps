@@ -129,7 +129,7 @@ All features are configurable through the `CONFIG` dictionary:
 - **Zoom In/Out**: Watch clusters automatically split or merge based on zoom level
 
 ### Time Filter Controls
-- **Time Filter Mode**: Choose between Static (all data), Date Range (custom range), or Animation (auto-play through time)
+- **Time Filter Mode**: Choose between Show Everything (all data), Date Range (custom range), or Animation (auto-play through time)
 - **Time Grouping**: Switch between monthly and yearly time periods
 - **Date Range Selectors**: Pick start and end months/years for custom date ranges
 - **Set Range Button**: Apply your selected date range to view all locations within that period
