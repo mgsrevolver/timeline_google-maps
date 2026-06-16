@@ -1957,9 +1957,9 @@
                 if (!e) { e = { key: k, count: 0, dwellMs: 0, sumLat: 0, sumLon: 0, prob: 0, semanticType: null, firstSeen: Infinity }; byKey.set(k, e); }
                 e.count++; e.sumLat += p.lat; e.sumLon += p.lon;
                 if (p.durationMs != null) e.dwellMs += p.durationMs;
-                const pr = p.probability || 0;
-                if (pr >= e.prob) { e.prob = pr; if (p.semanticType) e.semanticType = p.semanticType; }
-                if (!e.semanticType && p.semanticType) e.semanticType = p.semanticType;
+                // Consistent label per placeID: Home/Work wins even on a single visit
+                mergeSemantic(e, p.semanticType, p.probability || 0);
+                if ((p.probability || 0) > e.prob) e.prob = p.probability || 0;
                 if (p.timestamp != null && p.timestamp < e.firstSeen) e.firstSeen = p.timestamp;
             }
             const entries = [...byKey.values()];
@@ -3273,6 +3273,9 @@
             return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
         function gkey(lat, lon) { return `${lat.toFixed(4)},${lon.toFixed(4)}`; }
+        // Stable cache key: merged place id for places, coords for areas — so a
+        // place keeps the same looked-up name across every season.
+        function geoCacheKey(e) { return e.isArea ? `a:${gkey(e.lat, e.lon)}` : `p:${e.key}`; }
 
         function confBadge(conf) {
             if (conf == null || conf <= 0) return '';
@@ -3711,7 +3714,7 @@
 
         function applyCachedLabels(recap) {
             collectGeoTargets(recap).forEach(e => {
-                const g = geoCache.get(gkey(e.lat, e.lon));
+                const g = geoCache.get(geoCacheKey(e));
                 if (g) {
                     e.geoName = g.name;
                     e.geoAddress = g.address;
@@ -3734,16 +3737,17 @@
         }
 
         async function geocodeMissing(recap) {
-            const targets = collectGeoTargets(recap).filter(e => !geoCache.has(gkey(e.lat, e.lon)));
+            const targets = collectGeoTargets(recap).filter(e => !geoCache.has(geoCacheKey(e)));
             const btn = document.getElementById('lookupNamesBtn');
             if (!targets.length) { btn.textContent = '🌐 Place names ✓'; markGeoNodesDone(); return; }
             storyState.geocoding = true;
             let ok = 0, fail = 0, consec = 0, rateLimited = false, lastErr = '';
             for (let i = 0; i < targets.length; i++) {
                 const e = targets[i];
-                const key = gkey(e.lat, e.lon);
+                const ck = geoCacheKey(e);          // stable cache key (per place)
+                const domKey = gkey(e.lat, e.lon);  // matches the DOM node's data-gkey
                 btn.textContent = `🌐 Looking up ${i + 1}/${targets.length}…`;
-                highlightGeoNode(key);
+                highlightGeoNode(domKey);
                 try {
                     const zoom = e.isArea ? 12 : 18; // areas → city/neighborhood; places → building
                     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.lat}&lon=${e.lon}&zoom=${zoom}&addressdetails=1`;
@@ -3751,14 +3755,14 @@
                     if (r.ok) {
                         const j = await r.json();
                         const g = parseGeo(j, e.lat, e.lon);
-                        if (g && (g.name || g.address)) { geoCache.set(key, g); ok++; consec = 0; }
+                        if (g && (g.name || g.address)) { geoCache.set(ck, g); ok++; consec = 0; }
                         else { fail++; consec++; lastErr = 'empty result'; }
                     } else {
                         fail++; consec++; lastErr = `HTTP ${r.status}`;
                         if (r.status === 429 || r.status === 403) rateLimited = true;
                         console.warn('[geocode] HTTP', r.status, 'for', e.lat, e.lon);
                     }
-                    if (storyState.currentRecap === recap) { applyCachedLabels(recap); patchGeoNode(key); }
+                    if (storyState.currentRecap === recap) { applyCachedLabels(recap); patchGeoNode(domKey); }
                 } catch (err) {
                     fail++; consec++; rateLimited = true; // NetworkError/CORS often = OSM throttling
                     lastErr = err && err.message ? err.message : 'network error';
