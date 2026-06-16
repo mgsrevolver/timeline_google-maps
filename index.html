@@ -2010,16 +2010,16 @@
 
             for (let y = endYear; y >= startYear; y--) {
                 const defs = [
-                    { name: 'Fall',   months: [[y, 8], [y, 9], [y, 10]], start: [y, 8, 1],   endX: [y, 11, 1] },
-                    { name: 'Summer', months: [[y, 5], [y, 6], [y, 7]],  start: [y, 5, 1],   endX: [y, 8, 1] },
-                    { name: 'Spring', months: [[y, 2], [y, 3], [y, 4]],  start: [y, 2, 1],   endX: [y, 5, 1] },
-                    { name: 'Winter', months: [[y - 1, 11], [y, 0], [y, 1]], start: [y - 1, 11, 1], endX: [y, 2, 1] }
+                    { name: 'Fall',   label: `Fall ${y}`,   months: [[y, 8], [y, 9], [y, 10]], start: [y, 8, 1],   endX: [y, 11, 1] },
+                    { name: 'Summer', label: `Summer ${y}`, months: [[y, 5], [y, 6], [y, 7]],  start: [y, 5, 1],   endX: [y, 8, 1] },
+                    { name: 'Spring', label: `Spring ${y}`, months: [[y, 2], [y, 3], [y, 4]],  start: [y, 2, 1],   endX: [y, 5, 1] },
+                    { name: 'Winter', label: `Winter ${y - 1}–${y}`, months: [[y - 1, 11], [y, 0], [y, 1]], start: [y - 1, 11, 1], endX: [y, 2, 1] }
                 ];
                 for (const def of defs) {
                     if (!def.months.some(([yy, mm]) => has(yy, mm))) continue;
                     const startMs = new Date(def.start[0], def.start[1], def.start[2]).getTime();
                     const endMs = new Date(def.endX[0], def.endX[1], def.endX[2]).getTime() - 1;
-                    seasons.push({ id: `s-${def.name}-${y}`, group: 'season', label: `${def.name} ${y}`, startMs, endMs });
+                    seasons.push({ id: `s-${def.name}-${y}`, group: 'season', label: def.label, startMs, endMs });
                 }
                 // Full year
                 let yearHas = false;
@@ -2209,8 +2209,11 @@
             const t = s.toUpperCase();
             if (/HOME/.test(t)) return 'Home';
             if (/WORK/.test(t)) return 'Work';
-            if (t === 'UNKNOWN' || t === 'UNKNOWN_ACTIVITY_TYPE' || t === 'SEARCHED_ADDRESS' || t === 'INFERRED') return null;
-            if (t.startsWith('ACTIVITY')) return null;
+            const norm = t.replace(/[\s-]+/g, '_');
+            // Google placeholder labels that aren't meaningful place names
+            const block = new Set(['UNKNOWN', 'UNKNOWN_ACTIVITY_TYPE', 'SEARCHED_ADDRESS', 'ALIASED_LOCATION', 'INFERRED', 'TYPE_SEARCHED_ADDRESS', 'TYPE_ALIASED_LOCATION']);
+            if (block.has(norm)) return null;
+            if (norm.startsWith('ACTIVITY')) return null;
             return s.replace(/^TYPE_/, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
         }
 
@@ -3648,22 +3651,22 @@
         }
 
         function collectGeoTargets(recap) {
-            // Interleave so both top places and area clusters get budget (capped for rate limits)
+            // Privacy: never send Home/Work coordinates to OSM — they keep
+            // Google's own "Home"/"Work" label and are never reverse-geocoded.
+            const usable = e => e && e.lat != null && !(e.semanticType && /home|work/i.test(e.semanticType));
             const all = [];
-            if (recap.home.key && recap.home.lat != null) all.push(recap.home);
-            recap.places.topByDwell.slice(0, 4).forEach(p => all.push(p));
-            recap.places.topByVisits.slice(0, 4).forEach(p => all.push(p));
-            recap.footprint.cityClusters.slice(0, 6).forEach(p => all.push(p));
-            recap.places.topByDwell.slice(4).forEach(p => all.push(p));
-            recap.places.topByVisits.slice(4).forEach(p => all.push(p));
+            recap.places.topByDwell.slice(0, 4).forEach(p => { if (usable(p)) all.push(p); });
+            recap.places.topByVisits.slice(0, 4).forEach(p => { if (usable(p)) all.push(p); });
+            recap.footprint.cityClusters.slice(0, 6).forEach(p => { if (usable(p)) all.push(p); });
+            recap.places.topByDwell.slice(4).forEach(p => { if (usable(p)) all.push(p); });
+            recap.places.topByVisits.slice(4).forEach(p => { if (usable(p)) all.push(p); });
             const seen = new Set(); const out = [];
             for (const e of all) {
-                if (e.lat == null) continue;
                 const k = gkey(e.lat, e.lon);
                 if (seen.has(k)) continue;
                 seen.add(k); out.push(e);
             }
-            return out.slice(0, 15);
+            return out.slice(0, 12);
         }
 
         function applyCachedLabels(recap) {
@@ -3695,7 +3698,7 @@
             const btn = document.getElementById('lookupNamesBtn');
             if (!targets.length) { btn.textContent = '🌐 Place names ✓'; markGeoNodesDone(); return; }
             storyState.geocoding = true;
-            let ok = 0, fail = 0, lastErr = '';
+            let ok = 0, fail = 0, consec = 0, rateLimited = false, lastErr = '';
             for (let i = 0; i < targets.length; i++) {
                 const e = targets[i];
                 const key = gkey(e.lat, e.lon);
@@ -3707,28 +3710,36 @@
                     if (r.ok) {
                         const j = await r.json();
                         const g = parseGeo(j, e.lat, e.lon);
-                        if (g && (g.name || g.address)) { geoCache.set(key, g); ok++; }
-                        else { fail++; lastErr = 'empty result'; }
+                        if (g && (g.name || g.address)) { geoCache.set(key, g); ok++; consec = 0; }
+                        else { fail++; consec++; lastErr = 'empty result'; }
                     } else {
-                        fail++; lastErr = `HTTP ${r.status}`;
+                        fail++; consec++; lastErr = `HTTP ${r.status}`;
+                        if (r.status === 429 || r.status === 403) rateLimited = true;
                         console.warn('[geocode] HTTP', r.status, 'for', e.lat, e.lon);
                     }
-                    // Patch just this node in place — no full re-render, no flash
                     if (storyState.currentRecap === recap) { applyCachedLabels(recap); patchGeoNode(key); }
                 } catch (err) {
-                    fail++; lastErr = err && err.message ? err.message : 'network error';
+                    fail++; consec++; rateLimited = true; // NetworkError/CORS often = OSM throttling
+                    lastErr = err && err.message ? err.message : 'network error';
                     console.warn('[geocode] fetch failed:', err);
                 }
+                // Stop hammering OSM once it starts refusing
+                if (consec >= 3) { rateLimited = true; break; }
                 await new Promise(res => setTimeout(res, 1100)); // honor Nominatim ≤1 req/s
             }
             storyState.geocoding = false;
-            console.log(`[geocode] done: ${ok} ok, ${fail} failed`);
+            console.log(`[geocode] done: ${ok} ok, ${fail} failed${rateLimited ? ' (throttled)' : ''}`);
             if (storyState.currentRecap === recap) { applyCachedLabels(recap); markGeoNodesDone(); }
             if (ok === 0) {
                 btn.textContent = '🌐 Reveal place names';
                 btn.classList.remove('active');
                 storyState.geocodeEnabled = false;
-                showError(`Couldn't reach OpenStreetMap (${lastErr}). nominatim.openstreetmap.org may be blocked by an extension, VPN, or network.`);
+                showError(rateLimited
+                    ? 'OpenStreetMap is rate-limiting place lookups (this happens after repeated tries from one network). Wait a minute, then try again.'
+                    : `Couldn't reach OpenStreetMap (${lastErr}). It may be blocked by an extension, VPN, or network.`);
+            } else if (rateLimited) {
+                btn.textContent = `🌐 ${ok} named — paused`;
+                showError('OpenStreetMap paused further lookups (rate limit). The names found so far are shown; try again in a minute for the rest.');
             } else {
                 btn.textContent = fail > 0 ? `🌐 ${ok} named (${fail} failed)` : '🌐 Place names ✓';
             }
