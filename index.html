@@ -993,7 +993,12 @@
         .locating { color: var(--text-muted); font-style: italic; opacity: .7; }
 
         /* Story mini-map */
-        #story-map { width: 100%; max-width: 900px; height: clamp(260px, 48vh, 520px); border-radius: 18px; border: 1px solid var(--border-accent); background: var(--bg-elevated); }
+        .story-map-wrap { position: relative; width: 100%; max-width: 900px; }
+        #story-map { width: 100%; height: clamp(260px, 48vh, 520px); border-radius: 18px; border: 1px solid var(--border-accent); background: var(--bg-elevated); }
+        .story-map-hit { position: absolute; inset: 0; z-index: 500; cursor: pointer; display: flex; align-items: flex-end; justify-content: center; border-radius: 18px; transition: box-shadow .25s ease; }
+        .story-map-wrap:hover .story-map-hit { box-shadow: inset 0 0 0 2px var(--accent-gold); }
+        .story-map-cta { margin: 16px; padding: 9px 18px; border-radius: 999px; background: var(--bg-glass); border: 1px solid var(--border-accent); color: var(--accent-gold); font-weight: 600; font-size: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 0; transform: translateY(6px); transition: opacity .25s ease, transform .25s ease; }
+        .story-map-wrap:hover .story-map-cta { opacity: 1; transform: none; }
 
         /* Photos strip */
         .photos-strip { display: flex; gap: 12px; overflow-x: auto; width: 100%; padding-bottom: 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
@@ -1006,7 +1011,9 @@
             #map-mode-panel #controls { bottom: 15px; }
             .photos-strip img { height: 150px; }
             .place-name { font-size: 14px; }
+            .story-map-cta { opacity: 1; transform: none; }
         }
+        @media (hover: none) { .story-map-cta { opacity: 1; transform: none; } }
     </style>
 </head>
 <body>
@@ -3367,6 +3374,34 @@
             }
         }
 
+        /**
+         * Jump from the Story footprint map to the heatmap, scoped to the
+         * selected season. Drives the existing heatmap date-range controls.
+         */
+        function goToHeatmapForSeason(season) {
+            setMapMode('map');
+            const modeSel = document.getElementById('timeFilterMode');
+            if (!modeSel) return;
+            requestAnimationFrame(() => {
+                // "All Time" → just show everything
+                if (!season || season.startMs === -Infinity || season.id === 'all') {
+                    modeSel.value = 'static';
+                    modeSel.dispatchEvent(new Event('change'));
+                    return;
+                }
+                const range = getDataTimeRange(storyState.data) || { min: season.startMs, max: season.endMs };
+                const s = new Date(Math.max(season.startMs, range.min));
+                const e = new Date(Math.min(season.endMs, range.max));
+                modeSel.value = 'daterange';
+                modeSel.dispatchEvent(new Event('change'));
+                const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = String(v); };
+                set('startMonth', s.getMonth()); set('startYear', s.getFullYear());
+                set('endMonth', e.getMonth()); set('endYear', e.getFullYear());
+                const btn = document.getElementById('applyDateRange');
+                if (btn) btn.dispatchEvent(new Event('click'));
+            });
+        }
+
         /** Populate the season selector and wire all story controls (once). */
         function initStoryMode(locationData) {
             storyState.data = locationData;
@@ -3580,10 +3615,16 @@
         function buildMapCard(recap) {
             const card = el('div', 'story-card');
             card.appendChild(el('div', 'story-eyebrow', 'Your footprint'));
+            const wrap = el('div', 'story-map-wrap');
             const mapDiv = el('div'); mapDiv.id = 'story-map';
-            card.appendChild(mapDiv);
+            wrap.appendChild(mapDiv);
+            // Transparent click-catcher over the (static) mini-map → open heatmap
+            const hit = el('div', 'story-map-hit', '<span class="story-map-cta">Open this period in the heatmap →</span>');
+            hit.addEventListener('click', () => goToHeatmapForSeason(recap.season));
+            wrap.appendChild(hit);
+            card.appendChild(wrap);
             const areas = recap.footprint.cityClusters.length;
-            card.appendChild(el('div', 'story-subtle', `${areas} area${areas === 1 ? '' : 's'} across the map`));
+            card.appendChild(el('div', 'story-subtle', `${areas} area${areas === 1 ? '' : 's'} across the map · tap the map to explore it as a heatmap`));
             return { el: card, onReveal: () => initStoryMiniMap(recap) };
         }
 
