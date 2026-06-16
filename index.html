@@ -807,6 +807,200 @@
         .leaflet-popup-close-button:hover {
             color: var(--accent-gold) !important;
         }
+
+        /* ============================================
+           STORY MODE (Season Recap)
+           ============================================ */
+        #map-view { background: var(--bg-primary); }
+        #map-mode-panel, #story-mode-panel {
+            position: absolute;
+            inset: 0;
+        }
+        #story-mode-panel { display: flex; flex-direction: column; background: var(--bg-primary); }
+        #story-mode-panel.hidden { display: none; }
+        #map-mode-panel.hidden { display: none; }
+
+        /* Mode toggle pill */
+        #mode-toggle {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            display: flex;
+            gap: 4px;
+            padding: 4px;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-accent);
+            border-radius: 999px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+        }
+        .mode-btn {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font: inherit;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            padding: 8px 18px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        .mode-btn.active {
+            background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-dim) 100%);
+            color: #000;
+            box-shadow: 0 0 16px var(--accent-gold-glow);
+        }
+
+        /* Story top bar */
+        #story-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 64px 20px 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-secondary);
+            flex-wrap: wrap;
+            z-index: 5;
+        }
+        .story-bar-left { display: flex; align-items: center; gap: 10px; }
+        .story-bar-label { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        #seasonSelect {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-accent);
+            border-radius: 10px;
+            padding: 8px 14px;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .story-bar-right { display: flex; gap: 8px; flex-wrap: wrap; }
+        .story-mini-btn {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .story-mini-btn:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+        .story-mini-btn.active { background: var(--accent-gold); color: #000; border-color: var(--accent-gold); }
+        .story-mini-btn:disabled { opacity: 0.5; cursor: default; }
+
+        /* Scroller + cards */
+        #story-scroller {
+            flex: 1;
+            overflow-y: auto;
+            scroll-snap-type: y proximity;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+        .story-card {
+            min-height: auto;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: flex-start;
+            gap: 14px;
+            padding: clamp(28px, 4vw, 64px);
+            opacity: 0;
+            transform: translateY(28px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            position: relative;
+        }
+        .story-card.hero { min-height: 86vh; justify-content: center; gap: 18px; }
+        .story-card.in-view { opacity: 1; transform: none; }
+        .story-card + .story-card { border-top: 1px solid var(--border-subtle); }
+        .story-eyebrow {
+            color: var(--accent-gold);
+            font-size: clamp(13px, 2.5vw, 16px);
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .story-card h2 {
+            font-family: 'Space Grotesk', -apple-system, sans-serif;
+            font-size: clamp(2.4rem, 8vw, 5.5rem);
+            font-weight: 700;
+            line-height: 1.02;
+            letter-spacing: -1.5px;
+            margin: 0;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .story-stat {
+            font-family: 'Space Grotesk', -apple-system, sans-serif;
+            font-size: clamp(2.6rem, 9vw, 6rem);
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -2px;
+            color: var(--accent-gold);
+            text-shadow: 0 0 40px var(--accent-gold-glow);
+        }
+        .story-subtle { color: var(--text-secondary); font-size: clamp(1rem, 2.6vw, 1.4rem); max-width: 640px; line-height: 1.6; }
+        .story-narrative p { color: var(--text-primary); font-size: clamp(1.05rem, 2.8vw, 1.55rem); line-height: 1.7; max-width: 680px; margin: 0 0 16px; }
+
+        /* Chips / quick stats */
+        .story-chips { display: flex; flex-wrap: wrap; gap: 12px; }
+        .story-chip {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 14px 20px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .story-chip .v { display: block; font-size: clamp(1.4rem, 4vw, 2.2rem); font-weight: 700; color: var(--text-primary); font-family: 'Space Grotesk', sans-serif; }
+        .story-chip .l { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Mode breakdown bars */
+        .mode-bars { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
+        .mode-bar-row { display: flex; flex-direction: column; gap: 6px; }
+        .mode-bar-head { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary); }
+        .mode-bar-track { height: 10px; background: var(--bg-elevated); border-radius: 999px; overflow: hidden; }
+        .mode-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-gold-dim), var(--accent-gold)); border-radius: 999px; width: 0; transition: width 1s ease; }
+
+        /* Top places list */
+        .place-list { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 10px; }
+        .place-row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: var(--bg-glass); border: 1px solid var(--border-subtle); border-radius: 14px; }
+        .place-rank { font-family: 'Space Grotesk', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--accent-gold); min-width: 28px; }
+        .place-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .pn-primary { color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pn-secondary { color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .place-meta { color: var(--text-secondary); font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+        .conf { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+        .conf.high { background: rgba(80,200,120,0.18); color: #6BD89A; }
+        .conf.mid { background: rgba(212,175,55,0.18); color: var(--accent-gold); }
+        .conf.low { background: rgba(160,160,160,0.18); color: var(--text-secondary); }
+
+        /* Story mini-map */
+        #story-map { width: 100%; max-width: 900px; height: clamp(260px, 48vh, 520px); border-radius: 18px; border: 1px solid var(--border-accent); background: var(--bg-elevated); }
+
+        /* Photos strip */
+        .photos-strip { display: flex; gap: 12px; overflow-x: auto; width: 100%; padding-bottom: 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+        .photos-strip img { height: 220px; width: auto; border-radius: 12px; object-fit: cover; scroll-snap-align: start; flex: 0 0 auto; background: var(--bg-elevated); }
+        .story-note { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+
+        @media (max-width: 768px) {
+            #story-bar { padding: 60px 14px 12px; }
+            .story-card { padding: 28px 22px; min-height: 100%; }
+            #map-mode-panel #controls { bottom: 15px; }
+            .photos-strip img { height: 150px; }
+            .place-name { font-size: 14px; }
+        }
     </style>
 </head>
 <body>
@@ -890,6 +1084,11 @@
          MAP VIEW
          ============================================ -->
     <div id="map-view" class="view hidden">
+        <div id="mode-toggle">
+            <button id="modeMapBtn" class="mode-btn active" type="button">🗺 Heatmap</button>
+            <button id="modeStoryBtn" class="mode-btn" type="button">✨ Story</button>
+        </div>
+        <div id="map-mode-panel">
         <div id="map"></div>
         <div id="controls">
             <div id="controls-header">
@@ -985,6 +1184,22 @@
                 </div>
             </div>
         </div>
+        </div><!-- /#map-mode-panel -->
+
+        <div id="story-mode-panel" class="hidden">
+            <div id="story-bar">
+                <div class="story-bar-left">
+                    <span class="story-bar-label">Season</span>
+                    <select id="seasonSelect"></select>
+                </div>
+                <div class="story-bar-right">
+                    <button id="lookupNamesBtn" class="story-mini-btn" type="button" title="Sends only your top ~12 coordinates to OpenStreetMap to fetch real place names &amp; addresses. Nothing else leaves your device.">🌐 Reveal place names</button>
+                    <button id="addPhotosBtn" class="story-mini-btn" type="button" title="Match photos from your Google Photos Takeout to this season — read locally, never uploaded.">📷 Add photos</button>
+                    <input type="file" id="photosInput" webkitdirectory directory multiple hidden>
+                </div>
+            </div>
+            <div id="story-scroller"></div>
+        </div>
     </div>
 
     <!-- External JavaScript Libraries -->
@@ -1007,6 +1222,9 @@
 
         // Cancel token for async operations
         let processingCancelToken = { cancelled: false };
+
+        // Story mode state (set up after the map is initialized)
+        let mainMapInstance = null;
 
         /**
          * Switch between views
@@ -1161,6 +1379,21 @@
         }
 
         /**
+         * Great-circle distance between two coordinates, in meters.
+         * Used for activity distance fallback and farthest-from-home in the recap.
+         */
+        function haversineMeters(lat1, lon1, lat2, lon2) {
+            if (![lat1, lon1, lat2, lon2].every(n => typeof n === 'number' && isFinite(n))) return null;
+            const R = 6371000;
+            const toRad = d => d * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+            return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+        }
+
+        /**
          * Detect Google Takeout format
          */
         function detectFormat(jsonData) {
@@ -1243,10 +1476,14 @@
                         const coords = parseLatLngString(candidate.placeLocation);
 
                         if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                            const startTs = parseTimestamp(visit.startTime || segment.startTime);
+                            const endTs = parseTimestamp(visit.endTime || segment.endTime);
                             points.push({
                                 lat: coords.lat,
                                 lon: coords.lon,
-                                timestamp: parseTimestamp(visit.startTime || segment.startTime),
+                                timestamp: startTs,
+                                endTimestamp: endTs,
+                                durationMs: (startTs != null && endTs != null && endTs >= startTs) ? endTs - startTs : null,
                                 placeID: candidate.placeID || null,
                                 semanticType: candidate.semanticType || null,
                                 probability: candidate.probability || null,
@@ -1262,10 +1499,23 @@
 
                         if (coords && isValidCoordinate(coords.lat, coords.lon)) {
                             const activityType = activity.topCandidate?.type || 'UNKNOWN';
+                            const startTs = parseTimestamp(activity.startTime || segment.startTime);
+                            const endTs = parseTimestamp(activity.endTime || segment.endTime);
+                            const endCoords = parseLatLngString(activity.end);
+                            let dist = activity.distanceMeters != null ? parseFloat(activity.distanceMeters) : NaN;
+                            if (!isFinite(dist) && endCoords) {
+                                dist = haversineMeters(coords.lat, coords.lon, endCoords.lat, endCoords.lon);
+                            }
                             points.push({
                                 lat: coords.lat,
                                 lon: coords.lon,
-                                timestamp: parseTimestamp(activity.startTime || segment.startTime),
+                                timestamp: startTs,
+                                endTimestamp: endTs,
+                                durationMs: (startTs != null && endTs != null && endTs >= startTs) ? endTs - startTs : null,
+                                endLat: endCoords ? endCoords.lat : null,
+                                endLon: endCoords ? endCoords.lon : null,
+                                activityType,
+                                distanceMeters: isFinite(dist) ? dist : null,
                                 placeID: null,
                                 semanticType: `Activity (${activityType})`,
                                 probability: activity.topCandidate?.probability || null,
@@ -1324,10 +1574,15 @@
                             const lon = e7ToDecimal(loc.lngE7);
 
                             if (isValidCoordinate(lat, lon)) {
+                                const dur = visit.duration || {};
+                                const startTs = parseTimestamp(visit.startTime || dur.startTimestamp || dur.startTimestampMs);
+                                const endTs = parseTimestamp(visit.endTime || dur.endTimestamp || dur.endTimestampMs);
                                 points.push({
                                     lat,
                                     lon,
-                                    timestamp: parseTimestamp(visit.startTime),
+                                    timestamp: startTs,
+                                    endTimestamp: endTs,
+                                    durationMs: (startTs != null && endTs != null && endTs >= startTs) ? endTs - startTs : null,
                                     placeID: loc.placeId || null,
                                     semanticType: loc.semanticType || null,
                                     probability: null,
@@ -1340,6 +1595,7 @@
                     // Process activity segments
                     if (obj.activitySegment) {
                         const activity = obj.activitySegment;
+                        const dur = activity.duration || {};
 
                         if (activity.startLocation && activity.startLocation.latE7 && activity.startLocation.lngE7) {
                             const lat = e7ToDecimal(activity.startLocation.latE7);
@@ -1347,10 +1603,25 @@
 
                             if (isValidCoordinate(lat, lon)) {
                                 const activityType = activity.activityType || 'UNKNOWN';
+                                const startTs = parseTimestamp(activity.startTime || dur.startTimestamp || dur.startTimestampMs);
+                                const endTs = parseTimestamp(activity.endTime || dur.endTimestamp || dur.endTimestampMs);
+                                const end = activity.endLocation || {};
+                                const endLat = (end.latE7 && end.lngE7) ? e7ToDecimal(end.latE7) : null;
+                                const endLon = (end.latE7 && end.lngE7) ? e7ToDecimal(end.lngE7) : null;
+                                let dist = activity.distance != null ? parseFloat(activity.distance) : NaN;
+                                if (!isFinite(dist) && endLat != null) {
+                                    dist = haversineMeters(lat, lon, endLat, endLon);
+                                }
                                 points.push({
                                     lat,
                                     lon,
-                                    timestamp: parseTimestamp(activity.startTime),
+                                    timestamp: startTs,
+                                    endTimestamp: endTs,
+                                    durationMs: (startTs != null && endTs != null && endTs >= startTs) ? endTs - startTs : null,
+                                    endLat,
+                                    endLon,
+                                    activityType,
+                                    distanceMeters: isFinite(dist) ? dist : null,
                                     placeID: null,
                                     semanticType: `Activity (${activityType})`,
                                     probability: null,
@@ -1412,10 +1683,14 @@
                         const coords = parseLatLngString(candidate.placeLocation);
 
                         if (coords && isValidCoordinate(coords.lat, coords.lon)) {
+                            const startTs = parseTimestamp(item.startTime || item.visit.startTime);
+                            const endTs = parseTimestamp(item.endTime || item.visit.endTime);
                             points.push({
                                 lat: coords.lat,
                                 lon: coords.lon,
-                                timestamp: parseTimestamp(item.startTime || item.visit.startTime),
+                                timestamp: startTs,
+                                endTimestamp: endTs,
+                                durationMs: (startTs != null && endTs != null && endTs >= startTs) ? endTs - startTs : null,
                                 placeID: candidate.placeID || null,
                                 semanticType: candidate.semanticType || null,
                                 probability: parseFloat(candidate.probability) || null,
@@ -1431,10 +1706,23 @@
 
                         if (coords && isValidCoordinate(coords.lat, coords.lon)) {
                             const activityType = activity.topCandidate?.type || 'UNKNOWN';
+                            const startTs = parseTimestamp(item.startTime || activity.startTime);
+                            const endTs = parseTimestamp(item.endTime || activity.endTime);
+                            const endCoords = parseLatLngString(activity.end);
+                            let dist = activity.distanceMeters != null ? parseFloat(activity.distanceMeters) : NaN;
+                            if (!isFinite(dist) && endCoords) {
+                                dist = haversineMeters(coords.lat, coords.lon, endCoords.lat, endCoords.lon);
+                            }
                             points.push({
                                 lat: coords.lat,
                                 lon: coords.lon,
-                                timestamp: parseTimestamp(item.startTime || activity.startTime),
+                                timestamp: startTs,
+                                endTimestamp: endTs,
+                                durationMs: (startTs != null && endTs != null && endTs >= startTs) ? endTs - startTs : null,
+                                endLat: endCoords ? endCoords.lat : null,
+                                endLon: endCoords ? endCoords.lon : null,
+                                activityType,
+                                distanceMeters: isFinite(dist) ? dist : null,
                                 placeID: null,
                                 semanticType: `Activity (${activityType})`,
                                 probability: activity.topCandidate?.probability ? parseFloat(activity.topCandidate.probability) : null,
@@ -1589,6 +1877,7 @@
                 await new Promise(resolve => setTimeout(resolve, 100));
 
                 initMapView(points);
+                initStoryMode(points);
 
             } catch (error) {
                 console.error('Processing error:', error);
@@ -1602,6 +1891,418 @@
                 switchView('landing');
                 appState.processingCancelled = false;
             }
+        }
+
+        /* ============================================
+           PART 2.5: SEASON RECAP ENGINE (pure, no DOM)
+           Turns the parsed location array into a narrative
+           "Wrapped"-style recap for a chosen time window.
+           ============================================ */
+
+        // Memoized indices (rebuilt when a new dataset is loaded)
+        let recapIndices = { firstSeen: null, home: null, dataset: null };
+
+        /** Stable identity for a place: Google placeID, else an ~11m coordinate grid cell. */
+        function placeKey(p) {
+            return p.placeID || `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
+        }
+
+        /** Local-time day bucket key, e.g. "2023-07-04". */
+        function dayKey(ts) {
+            const d = new Date(ts);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        /** Min/max timestamp across the dataset (null if no timestamps at all). */
+        function getDataTimeRange(locationData) {
+            let min = Infinity, max = -Infinity;
+            for (const p of locationData) {
+                if (p.timestamp != null) {
+                    if (p.timestamp < min) min = p.timestamp;
+                    if (p.timestamp > max) max = p.timestamp;
+                }
+            }
+            return min === Infinity ? null : { min, max };
+        }
+
+        /** First-ever visit time per place, for "new places this season" detection. */
+        function buildPlaceFirstSeenIndex(locationData) {
+            const idx = new Map();
+            for (const p of locationData) {
+                if (p.source !== 'visit' || p.timestamp == null) continue;
+                const k = placeKey(p);
+                const prev = idx.get(k);
+                if (prev == null || p.timestamp < prev) idx.set(k, p.timestamp);
+            }
+            return idx;
+        }
+
+        /** Detect the user's home across the whole dataset (semanticType → dwell → frequency → none). */
+        function detectHome(locationData) {
+            const agg = new Map(); // key -> {count, dwellMs, lat, lon, isHome, prob, semanticType}
+            for (const p of locationData) {
+                if (p.source !== 'visit') continue;
+                const k = placeKey(p);
+                let e = agg.get(k);
+                if (!e) { e = { count: 0, dwellMs: 0, lat: p.lat, lon: p.lon, isHome: false, prob: 0, semanticType: null }; agg.set(k, e); }
+                e.count++;
+                if (p.durationMs != null) e.dwellMs += p.durationMs;
+                if (p.semanticType && /home/i.test(p.semanticType)) e.isHome = true;
+                const pr = p.probability || 0;
+                if (pr >= e.prob) { e.prob = pr; if (p.semanticType) e.semanticType = p.semanticType; }
+                if (!e.semanticType && p.semanticType) e.semanticType = p.semanticType;
+            }
+            if (agg.size === 0) return { key: null, lat: null, lon: null, method: 'none', prob: 0, semanticType: null };
+
+            let best = null, method = 'none';
+            for (const [k, e] of agg) { if (e.isHome && (!best || e.count > best.e.count)) { best = { k, e }; method = 'semanticType'; } }
+            if (!best) {
+                for (const [k, e] of agg) { if (e.dwellMs > 0 && (!best || e.dwellMs > best.e.dwellMs)) { best = { k, e }; method = 'dwell'; } }
+            }
+            if (!best) {
+                for (const [k, e] of agg) { if (!best || e.count > best.e.count) { best = { k, e }; method = 'frequency'; } }
+            }
+            return { key: best.k, lat: best.e.lat, lon: best.e.lon, method, prob: best.e.prob, semanticType: best.e.semanticType };
+        }
+
+        /** (Re)build memoized indices for the current dataset. */
+        function ensureRecapIndices(locationData) {
+            if (recapIndices.dataset === locationData && recapIndices.firstSeen) return;
+            recapIndices = {
+                dataset: locationData,
+                firstSeen: buildPlaceFirstSeenIndex(locationData),
+                home: detectHome(locationData)
+            };
+        }
+
+        /** Build a custom season window from explicit millisecond bounds. */
+        function makeCustomSeason(startMs, endMs, label) {
+            return { id: `custom-${startMs}-${endMs}`, group: 'custom', label: label || 'Custom Range', startMs, endMs };
+        }
+
+        /**
+         * Derive selectable seasons from the dataset's date range:
+         * meteorological seasons, full years, and All Time. Only windows that
+         * actually contain data are returned. Newest first within each group.
+         */
+        function getSeasonPresets(locationData) {
+            const range = getDataTimeRange(locationData);
+            if (!range) return [{ id: 'all', group: 'all', label: 'All Time', startMs: -Infinity, endMs: Infinity }];
+
+            const monthHas = new Set();
+            for (const p of locationData) {
+                if (p.timestamp != null) { const d = new Date(p.timestamp); monthHas.add(d.getFullYear() + '-' + d.getMonth()); }
+            }
+            const has = (y, m) => monthHas.has(y + '-' + m);
+
+            const startYear = new Date(range.min).getFullYear();
+            const endYear = new Date(range.max).getFullYear();
+            const seasons = [], years = [];
+
+            for (let y = endYear; y >= startYear; y--) {
+                const defs = [
+                    { name: 'Fall',   months: [[y, 8], [y, 9], [y, 10]], start: [y, 8, 1],   endX: [y, 11, 1] },
+                    { name: 'Summer', months: [[y, 5], [y, 6], [y, 7]],  start: [y, 5, 1],   endX: [y, 8, 1] },
+                    { name: 'Spring', months: [[y, 2], [y, 3], [y, 4]],  start: [y, 2, 1],   endX: [y, 5, 1] },
+                    { name: 'Winter', months: [[y - 1, 11], [y, 0], [y, 1]], start: [y - 1, 11, 1], endX: [y, 2, 1] }
+                ];
+                for (const def of defs) {
+                    if (!def.months.some(([yy, mm]) => has(yy, mm))) continue;
+                    const startMs = new Date(def.start[0], def.start[1], def.start[2]).getTime();
+                    const endMs = new Date(def.endX[0], def.endX[1], def.endX[2]).getTime() - 1;
+                    seasons.push({ id: `s-${def.name}-${y}`, group: 'season', label: `${def.name} ${y}`, startMs, endMs });
+                }
+                // Full year
+                let yearHas = false;
+                for (let m = 0; m < 12; m++) if (has(y, m)) { yearHas = true; break; }
+                if (yearHas) {
+                    years.push({
+                        id: `y-${y}`, group: 'year', label: `${y}`,
+                        startMs: new Date(y, 0, 1).getTime(),
+                        endMs: new Date(y + 1, 0, 1).getTime() - 1
+                    });
+                }
+            }
+            return [...seasons, ...years, { id: 'all', group: 'all', label: 'All Time', startMs: -Infinity, endMs: Infinity }];
+        }
+
+        /** Friendly lowercase label for a raw Google activity type. */
+        function prettyActivity(type) {
+            if (!type) return 'travel';
+            const map = {
+                IN_PASSENGER_VEHICLE: 'car', DRIVING: 'car', IN_VEHICLE: 'car',
+                WALKING: 'foot', ON_FOOT: 'foot', RUNNING: 'running',
+                CYCLING: 'bike', IN_BICYCLE: 'bike',
+                FLYING: 'air', IN_PLANE: 'air',
+                IN_BUS: 'bus', IN_TRAIN: 'train', IN_SUBWAY: 'subway',
+                IN_FERRY: 'ferry', SAILING: 'boat', MOTORCYCLING: 'motorcycle'
+            };
+            return map[type] || type.toLowerCase().replace(/_/g, ' ');
+        }
+
+        /**
+         * Compute the full recap object for a season window.
+         * Reads only the per-point fields; degrades gracefully when rich
+         * metadata (durations, activities) is absent.
+         */
+        function computeRecap(locationData, season) {
+            ensureRecapIndices(locationData);
+            const { firstSeen, home: homeId } = recapIndices;
+
+            const pts = locationData.filter(p => p.timestamp != null && p.timestamp >= season.startMs && p.timestamp <= season.endMs);
+
+            const meta = { pointCount: pts.length, visitCount: 0, activityCount: 0, pathCount: 0,
+                hasTimestamps: pts.length > 0, hasActivityData: false, hasDurationData: false };
+
+            // Distance by mode + place aggregation in a single pass
+            const distByMode = {};
+            let totalDist = 0, activitiesWithDist = 0;
+            const placeAgg = new Map(); // key -> {count, dwellMs, lat, lon}
+            const dayCount = new Map();
+            let bbox = { minLat: Infinity, maxLat: -Infinity, minLon: Infinity, maxLon: -Infinity };
+            const cityGrid = new Map();
+
+            for (const p of pts) {
+                if (p.source === 'visit') meta.visitCount++;
+                else if (p.source === 'activity') meta.activityCount++;
+                else meta.pathCount++;
+
+                if (p.lat < bbox.minLat) bbox.minLat = p.lat;
+                if (p.lat > bbox.maxLat) bbox.maxLat = p.lat;
+                if (p.lon < bbox.minLon) bbox.minLon = p.lon;
+                if (p.lon > bbox.maxLon) bbox.maxLon = p.lon;
+
+                const dk = dayKey(p.timestamp);
+                dayCount.set(dk, (dayCount.get(dk) || 0) + 1);
+
+                const ck = `${p.lat.toFixed(1)},${p.lon.toFixed(1)}`;
+                let ce = cityGrid.get(ck);
+                if (!ce) { ce = { lat: p.lat, lon: p.lon, count: 0 }; cityGrid.set(ck, ce); }
+                ce.count++;
+
+                if (p.source === 'activity') {
+                    if (p.distanceMeters != null) {
+                        totalDist += p.distanceMeters;
+                        activitiesWithDist++;
+                        const mode = p.activityType || 'UNKNOWN';
+                        distByMode[mode] = (distByMode[mode] || 0) + p.distanceMeters;
+                    }
+                    if (p.activityType) meta.hasActivityData = true;
+                } else if (p.source === 'visit') {
+                    const k = placeKey(p);
+                    let e = placeAgg.get(k);
+                    if (!e) { e = { key: k, count: 0, dwellMs: 0, lat: p.lat, lon: p.lon, prob: 0, semanticType: null }; placeAgg.set(k, e); }
+                    e.count++;
+                    if (p.durationMs != null) { e.dwellMs += p.durationMs; meta.hasDurationData = true; }
+                    const pr = p.probability || 0;
+                    if (pr >= e.prob) { e.prob = pr; if (p.semanticType) e.semanticType = p.semanticType; }
+                    if (!e.semanticType && p.semanticType) e.semanticType = p.semanticType;
+                }
+            }
+
+            // Places
+            const places = [...placeAgg.values()];
+            const newPlaces = places.filter(e => { const f = firstSeen.get(e.key); return f != null && f >= season.startMs; }).length;
+            // Top lists exclude the detected home so "aside from home" framing is accurate
+            const notHome = places.filter(e => e.key !== homeId.key);
+            const mapEntry = e => ({ key: e.key, lat: e.lat, lon: e.lon, count: e.count, dwellMs: e.dwellMs, prob: e.prob, semanticType: e.semanticType, geoName: null, geoAddress: null, confidence: null });
+            const topByVisits = [...notHome].sort((a, b) => b.count - a.count).slice(0, 6).map(mapEntry);
+            const topByDwell = [...notHome].filter(e => e.dwellMs > 0).sort((a, b) => b.dwellMs - a.dwellMs).slice(0, 6).map(mapEntry);
+
+            // Home time this season
+            let timeAtHomeMs = 0, timeAwayMs = 0;
+            if (homeId.key) {
+                for (const e of places) {
+                    if (e.key === homeId.key) timeAtHomeMs += e.dwellMs; else timeAwayMs += e.dwellMs;
+                }
+            }
+            const homeFraction = (timeAtHomeMs + timeAwayMs) > 0 ? timeAtHomeMs / (timeAtHomeMs + timeAwayMs) : null;
+
+            // Extremes
+            let farthestPoint = null;
+            if (homeId.key && homeId.lat != null) {
+                let maxD = -1;
+                for (const p of pts) {
+                    const d = haversineMeters(homeId.lat, homeId.lon, p.lat, p.lon);
+                    if (d != null && d > maxD) { maxD = d; farthestPoint = { lat: p.lat, lon: p.lon, distanceFromHomeMeters: d, timestamp: p.timestamp }; }
+                }
+            }
+            let busiestDay = null;
+            for (const [dk, c] of dayCount) if (!busiestDay || c > busiestDay.count) busiestDay = { dateKey: dk, count: c };
+            const activeDays = dayCount.size;
+
+            // Footprint
+            const cityClusters = [...cityGrid.values()].sort((a, b) => b.count - a.count).slice(0, 8)
+                .map(c => ({ lat: c.lat, lon: c.lon, count: c.count, prob: 0, semanticType: null, geoName: null, geoAddress: null, confidence: null }));
+            const footprintPoints = pts.filter(p => p.source !== 'visit' || true) // keep all, ordered by time
+                .map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp }))
+                .sort((a, b) => a.timestamp - b.timestamp);
+
+            // Data quality
+            let dataQuality = 'rich';
+            if (meta.visitCount === 0 && meta.activityCount === 0) dataQuality = 'minimal';
+            else if (meta.pointCount < 20 || activeDays < 3) dataQuality = 'sparse';
+
+            return {
+                season,
+                meta,
+                dataQuality,
+                distance: {
+                    totalMeters: activitiesWithDist > 0 ? totalDist : null,
+                    byMode: distByMode,
+                    knownFraction: meta.activityCount > 0 ? activitiesWithDist / meta.activityCount : 0
+                },
+                places: { visited: places.length, newPlaces, topByVisits, topByDwell },
+                home: {
+                    key: homeId.key, lat: homeId.lat, lon: homeId.lon, method: homeId.method,
+                    prob: homeId.prob, semanticType: homeId.semanticType,
+                    geoName: null, geoAddress: null, confidence: null,
+                    timeAtHomeMs, timeAwayMs, homeFraction
+                },
+                extremes: { farthestPoint, busiestDay, activeDays },
+                footprint: {
+                    bbox: bbox.minLat === Infinity ? null : bbox,
+                    cityClusters,
+                    points: footprintPoints
+                }
+            };
+        }
+
+        /* ============================================
+           NARRATIVE GENERATION (pure string templates)
+           ============================================ */
+
+        function fmtDistance(m) {
+            if (m == null) return null;
+            if (m < 1000) return `${Math.round(m)} m`;
+            const km = m / 1000;
+            const kmStr = km >= 100 ? Math.round(km).toLocaleString() : km.toFixed(1);
+            const mi = Math.round(km * 0.621371).toLocaleString();
+            return `${kmStr} km (${mi} mi)`;
+        }
+
+        function fmtDuration(ms) {
+            if (ms == null || ms <= 0) return null;
+            const mins = Math.round(ms / 60000);
+            const days = Math.floor(mins / 1440);
+            const hrs = Math.floor((mins % 1440) / 60);
+            const m = mins % 60;
+            if (days > 0) return `${days}d ${hrs}h`;
+            if (hrs > 0) return `${hrs}h ${m}m`;
+            return `${m}m`;
+        }
+
+        /** Human-friendly version of a Google semanticType, or null if not meaningful. */
+        function prettySemantic(s) {
+            if (!s) return null;
+            const t = s.toUpperCase();
+            if (/HOME/.test(t)) return 'Home';
+            if (/WORK/.test(t)) return 'Work';
+            if (t === 'UNKNOWN' || t === 'UNKNOWN_ACTIVITY_TYPE' || t === 'SEARCHED_ADDRESS' || t === 'INFERRED') return null;
+            if (t.startsWith('ACTIVITY')) return null;
+            return s.replace(/^TYPE_/, '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        /**
+         * Best-guess identity for a place: geocoded name → address → semantic
+         * label → coordinates (last resort), plus a 0–1 confidence when known.
+         */
+        function placeIdentity(e) {
+            if (!e) return { primary: 'an unknown spot', secondary: null, confidence: null };
+            const name = e.geoName || null;
+            const address = e.geoAddress || null;
+            const sem = prettySemantic(e.semanticType);
+            let primary, secondary = null, confidence = null;
+            if (name) { primary = name; secondary = address; confidence = e.confidence; }
+            else if (address) { primary = address; confidence = e.confidence; }
+            else if (sem) { primary = sem; confidence = e.prob || null; }
+            else { primary = `${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}`; confidence = null; }
+            return { primary, secondary, confidence };
+        }
+
+        function coordLabel(entry) {
+            return placeIdentity(entry).primary;
+        }
+
+        function dateLabel(dateKey) {
+            const [y, m, d] = dateKey.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+        }
+
+        function topModeLabel(byMode) {
+            let best = null;
+            for (const [mode, m] of Object.entries(byMode)) if (!best || m > best.m) best = { mode, m };
+            return best ? prettyActivity(best.mode) : null;
+        }
+
+        /**
+         * Build headline + narrative paragraphs + quick-stat chips from a recap.
+         * Every superlative is guarded by capability flags / minimum counts.
+         */
+        function generateNarrative(recap) {
+            const { season, meta, dataQuality, distance, places, home, extremes } = recap;
+            const paragraphs = [];
+            const stats = [];
+
+            const headline = `Your ${season.label}`;
+
+            if (dataQuality === 'minimal') {
+                paragraphs.push(`We didn't have rich place or trip details for ${season.label}, but here's the shape of where you were.`);
+                if (extremes.activeDays) stats.push({ label: 'Active days', value: extremes.activeDays.toLocaleString() });
+                if (recap.footprint.cityClusters.length) stats.push({ label: 'Areas', value: recap.footprint.cityClusters.length.toLocaleString() });
+                if (extremes.busiestDay && extremes.activeDays > 1) paragraphs.push(`${dateLabel(extremes.busiestDay.dateKey)} was your busiest day.`);
+                return { headline, paragraphs, stats };
+            }
+
+            if (dataQuality === 'sparse') paragraphs.push(`A quieter ${season.label} — here's a glimpse of it.`);
+
+            // Distance
+            if (distance.totalMeters) {
+                const mode = topModeLabel(distance.byMode);
+                let s = `You traveled ${fmtDistance(distance.totalMeters)}`;
+                if (mode) s += ` — mostly by ${mode}`;
+                s += '.';
+                if (distance.knownFraction > 0 && distance.knownFraction < 0.5) s += ' (based on the trips we could measure.)';
+                paragraphs.push(s);
+                stats.push({ label: 'Distance', value: fmtDistance(distance.totalMeters) });
+            }
+
+            // Places
+            if (places.visited > 0) {
+                let s = `You spent time across ${places.visited.toLocaleString()} place${places.visited === 1 ? '' : 's'}`;
+                if (places.newPlaces > 0) s += `, ${places.newPlaces.toLocaleString()} of them for the first time`;
+                s += '.';
+                paragraphs.push(s);
+                stats.push({ label: 'Places', value: places.visited.toLocaleString() });
+                if (places.newPlaces > 0) stats.push({ label: 'New places', value: places.newPlaces.toLocaleString() });
+            }
+
+            // Top place — prefer dwell, fall back to visit count
+            if (places.topByDwell.length && dataQuality !== 'sparse') {
+                const t = places.topByDwell[0];
+                paragraphs.push(`Aside from home, you spent the most time at ${coordLabel(t)} (${fmtDuration(t.dwellMs)}).`);
+            } else if (places.topByVisits.length && places.topByVisits[0].count > 1) {
+                const t = places.topByVisits[0];
+                paragraphs.push(`Your most-visited spot was ${coordLabel(t)} (${t.count} visits).`);
+            }
+
+            // Home
+            if (home.method !== 'none' && home.homeFraction != null) {
+                paragraphs.push(`You spent ${Math.round(home.homeFraction * 100)}% of your tracked time at home and the rest out exploring.`);
+            }
+
+            // Farthest
+            if (extremes.farthestPoint && extremes.farthestPoint.distanceFromHomeMeters > 1000) {
+                paragraphs.push(`Your farthest adventure took you ${fmtDistance(extremes.farthestPoint.distanceFromHomeMeters)} from home.`);
+            }
+
+            // Busiest day
+            if (extremes.busiestDay && extremes.activeDays > 1) {
+                paragraphs.push(`${dateLabel(extremes.busiestDay.dateKey)} was your busiest day on the move.`);
+                stats.push({ label: 'Active days', value: extremes.activeDays.toLocaleString() });
+            }
+
+            return { headline, paragraphs, stats };
         }
 
         /* ============================================
@@ -1738,10 +2439,11 @@
                 "Satellite": "Tiles &copy; Esri"
             };
 
-            const initialMapStyle = "OpenStreetMap";
+            const initialMapStyle = "Dark";
 
             // --- Map Initialization ---
             const map = L.map('map').setView(mapCenter, mapZoom);
+            mainMapInstance = map;
             let tileLayer = L.tileLayer(mapStyles[initialMapStyle], {
                 attribution: mapAttributions[initialMapStyle],
                 maxZoom: 19
@@ -2483,6 +3185,542 @@
             } else {
                 document.getElementById('markerToggleControl').style.display = 'none';
             }
+        }
+
+        /* ============================================
+           PART 4: STORY MODE (Season Recap UI)
+           ============================================ */
+
+        const storyState = {
+            data: null, presets: [], currentSeasonId: null, currentRecap: null,
+            rendered: false, wired: false, observer: null, revealCbs: null,
+            miniMap: null, photoMeta: null, photoURLs: [], geocodeEnabled: false
+        };
+        const geoCache = new Map(); // "lat,lon" -> place name (session only, in-memory)
+
+        function el(tag, cls, html) {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (html != null) e.innerHTML = html;
+            return e;
+        }
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function gkey(lat, lon) { return `${lat.toFixed(4)},${lon.toFixed(4)}`; }
+
+        function confBadge(conf) {
+            if (conf == null || conf <= 0) return '';
+            const pct = Math.round(conf * 100);
+            const cls = pct >= 80 ? 'high' : (pct >= 60 ? 'mid' : 'low');
+            return `<span class="conf ${cls}" title="Best-guess confidence">${pct}%</span>`;
+        }
+
+        /** A ranked place row showing best-guess identity + a confidence badge. */
+        function placeRow(rank, entry, meta) {
+            const id = placeIdentity(entry);
+            const row = el('div', 'place-row');
+            row.innerHTML =
+                `<span class="place-rank">${rank}</span>` +
+                `<span class="place-name"><span class="pn-primary">${escapeHtml(id.primary)}</span>` +
+                (id.secondary ? `<span class="pn-secondary">${escapeHtml(id.secondary)}</span>` : '') +
+                `</span>` +
+                `<span class="place-meta">${escapeHtml(meta)} ${confBadge(id.confidence)}</span>`;
+            return row;
+        }
+
+        /** Inline prompt nudging the user to reveal real place names. */
+        function geocodeHint() {
+            const div = el('div', 'story-note', '🌐 Showing approximate labels — tap <strong>Reveal place names</strong> above for real names &amp; addresses.');
+            return div;
+        }
+
+        /** Eased count-up animation for a big stat number. */
+        function animateCount(elem, to, fmt) {
+            const dur = 1100;
+            const ease = t => 1 - Math.pow(1 - t, 3);
+            let startTs = null;
+            function frame(ts) {
+                if (startTs === null) startTs = ts;
+                const p = Math.min(1, (ts - startTs) / dur);
+                const v = to * ease(p);
+                elem.textContent = fmt ? fmt(v) : Math.round(v).toLocaleString();
+                if (p < 1) requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame);
+        }
+
+        /** Switch between the heatmap panel and the story panel. */
+        function setMapMode(mode) {
+            appState.mapMode = mode;
+            const mapPanel = document.getElementById('map-mode-panel');
+            const storyPanel = document.getElementById('story-mode-panel');
+            const mapBtn = document.getElementById('modeMapBtn');
+            const storyBtn = document.getElementById('modeStoryBtn');
+            if (mode === 'story') {
+                mapPanel.classList.add('hidden');
+                storyPanel.classList.remove('hidden');
+                storyBtn.classList.add('active');
+                mapBtn.classList.remove('active');
+                if (!storyState.rendered) { renderCurrentSeason(); storyState.rendered = true; }
+            } else {
+                storyPanel.classList.add('hidden');
+                mapPanel.classList.remove('hidden');
+                mapBtn.classList.add('active');
+                storyBtn.classList.remove('active');
+                if (mainMapInstance) requestAnimationFrame(() => mainMapInstance.invalidateSize());
+            }
+        }
+
+        /** Populate the season selector and wire all story controls (once). */
+        function initStoryMode(locationData) {
+            storyState.data = locationData;
+            storyState.rendered = false;
+            storyState.geocodeEnabled = false;
+            revokePhotoURLs();
+            storyState.photoMeta = null;
+            appState.mapMode = 'map';
+
+            const presets = getSeasonPresets(locationData);
+            storyState.presets = presets;
+            storyState.currentSeasonId = presets[0].id;
+
+            const sel = document.getElementById('seasonSelect');
+            sel.innerHTML = '';
+            const groupLabels = { season: 'Seasons', year: 'Years', all: 'Everything', custom: 'Custom' };
+            let currentGroup = null, optgroup = null;
+            presets.forEach(p => {
+                if (p.group !== currentGroup) {
+                    currentGroup = p.group;
+                    optgroup = document.createElement('optgroup');
+                    optgroup.label = groupLabels[p.group] || '';
+                    sel.appendChild(optgroup);
+                }
+                const opt = document.createElement('option');
+                opt.value = p.id; opt.textContent = p.label;
+                optgroup.appendChild(opt);
+            });
+            sel.value = storyState.currentSeasonId;
+
+            if (!storyState.wired) {
+                document.getElementById('modeMapBtn').addEventListener('click', () => setMapMode('map'));
+                document.getElementById('modeStoryBtn').addEventListener('click', () => setMapMode('story'));
+                sel.addEventListener('change', () => {
+                    storyState.currentSeasonId = sel.value;
+                    renderCurrentSeason();
+                });
+                document.getElementById('lookupNamesBtn').addEventListener('click', onLookupNames);
+                document.getElementById('addPhotosBtn').addEventListener('click', () => document.getElementById('photosInput').click());
+                document.getElementById('photosInput').addEventListener('change', e => {
+                    if (e.target.files && e.target.files.length) handlePhotosSelected(e.target.files);
+                });
+                storyState.wired = true;
+            }
+        }
+
+        /** Compute the recap for the selected season and render it. */
+        function renderCurrentSeason() {
+            const season = storyState.presets.find(s => s.id === storyState.currentSeasonId) || storyState.presets[0];
+            const recap = computeRecap(storyState.data, season);
+            storyState.currentRecap = recap;
+            if (storyState.geocodeEnabled) applyCachedLabels(recap);
+            renderStory(recap);
+            if (storyState.geocodeEnabled) geocodeMissing(recap);
+        }
+
+        function revokePhotoURLs() {
+            storyState.photoURLs.forEach(u => URL.revokeObjectURL(u));
+            storyState.photoURLs = [];
+        }
+
+        /** Rebuild the full card stack for a recap. */
+        function renderStory(recap) {
+            const scroller = document.getElementById('story-scroller');
+            if (storyState.observer) { storyState.observer.disconnect(); storyState.observer = null; }
+            if (storyState.miniMap) { storyState.miniMap.remove(); storyState.miniMap = null; }
+            revokePhotoURLs();
+            scroller.innerHTML = '';
+            storyState.revealCbs = new Map();
+
+            const narrative = generateNarrative(recap);
+            const cards = [];
+            cards.push(buildCoverCard(recap, narrative));
+            if (recap.distance.totalMeters) cards.push(buildDistanceCard(recap));
+            if (recap.places.visited > 0) cards.push(buildPlacesCard(recap));
+            if (recap.footprint.cityClusters.length > 0) cards.push(buildAreasCard(recap));
+            if (recap.footprint.points.length > 1) cards.push(buildMapCard(recap));
+            if (recap.extremes.farthestPoint || (recap.extremes.busiestDay && recap.extremes.activeDays > 1)) cards.push(buildHighlightsCard(recap));
+            if (storyState.photoMeta) cards.push(buildPhotosCard(recap));
+            cards.push(buildNarrativeCard(narrative));
+
+            const obs = new IntersectionObserver(entries => {
+                entries.forEach(en => {
+                    if (en.isIntersecting) {
+                        en.target.classList.add('in-view');
+                        const cb = storyState.revealCbs.get(en.target);
+                        if (cb) { cb(); storyState.revealCbs.delete(en.target); }
+                    }
+                });
+            }, { threshold: 0.35 });
+
+            cards.forEach(c => {
+                scroller.appendChild(c.el);
+                obs.observe(c.el);
+                if (c.onReveal) storyState.revealCbs.set(c.el, c.onReveal);
+            });
+            storyState.observer = obs;
+            scroller.scrollTop = 0;
+
+            // Reveal the first card immediately (it's already in view)
+            requestAnimationFrame(() => {
+                const first = cards[0];
+                if (!first) return;
+                first.el.classList.add('in-view');
+                const cb = storyState.revealCbs.get(first.el);
+                if (cb) { cb(); storyState.revealCbs.delete(first.el); }
+            });
+        }
+
+        function buildCoverCard(recap, narrative) {
+            const card = el('div', 'story-card hero');
+            const range = recap.season.startMs > -Infinity
+                ? `${new Date(recap.season.startMs).toLocaleDateString()} – ${new Date(recap.season.endMs).toLocaleDateString()}`
+                : 'All of your history';
+            card.appendChild(el('div', 'story-eyebrow', 'Season Recap'));
+            card.appendChild(el('h2', null, escapeHtml(narrative.headline)));
+            card.appendChild(el('div', 'story-subtle', `${range} · ${recap.meta.pointCount.toLocaleString()} location points`));
+            if (narrative.stats.length) {
+                const chips = el('div', 'story-chips');
+                narrative.stats.slice(0, 4).forEach(s => {
+                    chips.appendChild(el('div', 'story-chip', `<span class="v">${escapeHtml(s.value)}</span><span class="l">${escapeHtml(s.label)}</span>`));
+                });
+                card.appendChild(chips);
+            }
+            return { el: card };
+        }
+
+        function buildDistanceCard(recap) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'Distance traveled'));
+            const km = Math.round(recap.distance.totalMeters / 1000);
+            const stat = el('div', 'story-stat', '0');
+            card.appendChild(stat);
+            card.appendChild(el('div', 'story-subtle', `kilometers on the move · ${fmtDistance(recap.distance.totalMeters)}`));
+
+            const modes = Object.entries(recap.distance.byMode).sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (modes.length) {
+                const max = modes[0][1] || 1;
+                const bars = el('div', 'mode-bars');
+                modes.forEach(([m, v]) => {
+                    const row = el('div', 'mode-bar-row');
+                    row.innerHTML = `<div class="mode-bar-head"><span>${escapeHtml(prettyActivity(m))}</span><span>${fmtDistance(v)}</span></div>` +
+                        `<div class="mode-bar-track"><div class="mode-bar-fill" data-w="${Math.max(2, Math.round(v / max * 100))}"></div></div>`;
+                    bars.appendChild(row);
+                });
+                card.appendChild(bars);
+            }
+            return {
+                el: card,
+                onReveal: () => {
+                    animateCount(stat, km);
+                    card.querySelectorAll('.mode-bar-fill').forEach(f => { f.style.width = f.dataset.w + '%'; });
+                }
+            };
+        }
+
+        function buildPlacesCard(recap) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'Places'));
+            const stat = el('div', 'story-stat', '0');
+            card.appendChild(stat);
+            let sub = `place${recap.places.visited === 1 ? '' : 's'} you spent time`;
+            if (recap.places.newPlaces > 0) sub += ` · ${recap.places.newPlaces.toLocaleString()} brand new`;
+            card.appendChild(el('div', 'story-subtle', sub));
+
+            const list = (recap.places.topByDwell.length ? recap.places.topByDwell : recap.places.topByVisits);
+            if (list.length) {
+                const useDwell = recap.places.topByDwell.length > 0;
+                card.appendChild(el('div', 'story-eyebrow', useDwell ? 'Where you lingered' : 'Most visited'));
+                const wrap = el('div', 'place-list');
+                list.forEach((p, i) => {
+                    const meta = useDwell ? fmtDuration(p.dwellMs) : `${p.count} visit${p.count === 1 ? '' : 's'}`;
+                    wrap.appendChild(placeRow(i + 1, p, meta));
+                });
+                card.appendChild(wrap);
+            }
+
+            if (!storyState.geocodeEnabled) card.appendChild(geocodeHint());
+            return { el: card, onReveal: () => animateCount(stat, recap.places.visited) };
+        }
+
+        function buildAreasCard(recap) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'Areas you spent time'));
+            const clusters = recap.footprint.cityClusters;
+            const stat = el('div', 'story-stat', '0');
+            card.appendChild(stat);
+            card.appendChild(el('div', 'story-subtle', `distinct area${clusters.length === 1 ? '' : 's'} on the map`));
+            const named = clusters.filter(c => c.geoName || c.geoAddress);
+            if (named.length) {
+                const chips = el('div', 'story-chips');
+                named.slice(0, 10).forEach(c => {
+                    const id = placeIdentity(c);
+                    chips.appendChild(el('div', 'story-chip', `<span class="v">${escapeHtml(id.primary)}</span><span class="l">${c.count.toLocaleString()} points</span>`));
+                });
+                card.appendChild(chips);
+            } else if (!storyState.geocodeEnabled) {
+                card.appendChild(geocodeHint());
+            }
+            return { el: card, onReveal: () => animateCount(stat, clusters.length) };
+        }
+
+        function buildMapCard(recap) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'Your footprint'));
+            const mapDiv = el('div'); mapDiv.id = 'story-map';
+            card.appendChild(mapDiv);
+            const areas = recap.footprint.cityClusters.length;
+            card.appendChild(el('div', 'story-subtle', `${areas} area${areas === 1 ? '' : 's'} across the map`));
+            return { el: card, onReveal: () => initStoryMiniMap(recap) };
+        }
+
+        function initStoryMiniMap(recap) {
+            if (storyState.miniMap) { storyState.miniMap.remove(); storyState.miniMap = null; }
+            const m = L.map('story-map', {
+                zoomControl: false, attributionControl: false,
+                dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+                boxZoom: false, keyboard: false, touchZoom: false, tap: false
+            });
+            storyState.miniMap = m;
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(m);
+
+            const pts = recap.footprint.points;
+            if (pts.length > 1) {
+                const coords = decimatePoints(pts, 2000).map(p => [p.lat, p.lon]);
+                L.polyline(coords, { color: '#D4AF37', weight: 2, opacity: 0.65 }).addTo(m);
+            }
+            recap.places.topByVisits.forEach(p => {
+                L.circleMarker([p.lat, p.lon], { radius: 5, color: '#D4AF37', fillColor: '#D4AF37', fillOpacity: 0.9, weight: 1 }).addTo(m);
+            });
+            const b = recap.footprint.bbox;
+            setTimeout(() => {
+                m.invalidateSize();
+                if (b) {
+                    if (b.minLat === b.maxLat && b.minLon === b.maxLon) m.setView([b.minLat, b.minLon], 12);
+                    else m.fitBounds([[b.minLat, b.minLon], [b.maxLat, b.maxLon]], { padding: [30, 30] });
+                }
+            }, 60);
+        }
+
+        function buildHighlightsCard(recap) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'Highlights'));
+            const chips = el('div', 'story-chips');
+            const f = recap.extremes.farthestPoint;
+            if (f && f.distanceFromHomeMeters > 1000) {
+                chips.appendChild(el('div', 'story-chip', `<span class="v">${escapeHtml(fmtDistance(f.distanceFromHomeMeters))}</span><span class="l">Farthest from home</span>`));
+            }
+            if (recap.extremes.busiestDay && recap.extremes.activeDays > 1) {
+                chips.appendChild(el('div', 'story-chip', `<span class="v">${escapeHtml(dateLabel(recap.extremes.busiestDay.dateKey))}</span><span class="l">Busiest day</span>`));
+                chips.appendChild(el('div', 'story-chip', `<span class="v">${recap.extremes.activeDays.toLocaleString()}</span><span class="l">Active days</span>`));
+            }
+            card.appendChild(chips);
+            return { el: card };
+        }
+
+        function buildNarrativeCard(narrative) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'In a few words'));
+            const wrap = el('div', 'story-narrative');
+            narrative.paragraphs.forEach(p => wrap.appendChild(el('p', null, escapeHtml(p))));
+            if (!narrative.paragraphs.length) wrap.appendChild(el('p', null, 'Not enough detail to tell this story yet.'));
+            card.appendChild(wrap);
+            return { el: card };
+        }
+
+        function buildPhotosCard(recap) {
+            const card = el('div', 'story-card');
+            card.appendChild(el('div', 'story-eyebrow', 'Photos from this season'));
+            const matches = storyState.photoMeta
+                .filter(p => p.file && p.ts >= recap.season.startMs && p.ts <= recap.season.endMs)
+                .sort((a, b) => a.ts - b.ts)
+                .slice(0, 40);
+            if (!matches.length) {
+                card.appendChild(el('div', 'story-subtle', 'No photos matched this season. Try another season, or add a different Takeout folder.'));
+                return { el: card };
+            }
+            const strip = el('div', 'photos-strip');
+            matches.forEach(p => {
+                const url = URL.createObjectURL(p.file);
+                storyState.photoURLs.push(url);
+                const img = document.createElement('img');
+                img.src = url; img.loading = 'lazy'; img.decoding = 'async';
+                img.alt = new Date(p.ts).toLocaleDateString();
+                strip.appendChild(img);
+            });
+            card.appendChild(strip);
+            card.appendChild(el('div', 'story-note', `🔒 ${matches.length} photo${matches.length === 1 ? '' : 's'} read locally — never uploaded`));
+            return { el: card };
+        }
+
+        /* ---- Reverse geocoding (opt-in, throttled, top-N only) ---- */
+
+        /** Parse a Nominatim reverse result into {name, address, confidence}. */
+        function parseGeo(j) {
+            if (!j) return null;
+            const a = j.address || {};
+            const name = j.name || a.amenity || a.shop || a.tourism || a.leisure || a.building || null;
+            const street = a.house_number ? `${a.house_number} ${a.road || ''}`.trim() : (a.road || null);
+            const locality = a.city || a.town || a.village || a.suburb || a.municipality || a.county || a.state || null;
+            const parts = [];
+            if (street) parts.push(street);
+            if (locality) parts.push(locality);
+            let address = parts.join(', ');
+            if (!address) address = j.display_name ? j.display_name.split(',').slice(0, 2).join(',').trim() : null;
+            // Confidence ~ specificity of the match
+            const confidence = a.house_number ? 0.95 : (name ? 0.85 : (a.road ? 0.72 : 0.55));
+            return { name, address, confidence };
+        }
+
+        function collectGeoTargets(recap) {
+            // Interleave so both top places and area clusters get budget (capped for rate limits)
+            const all = [];
+            if (recap.home.key && recap.home.lat != null) all.push(recap.home);
+            recap.places.topByDwell.slice(0, 4).forEach(p => all.push(p));
+            recap.places.topByVisits.slice(0, 4).forEach(p => all.push(p));
+            recap.footprint.cityClusters.slice(0, 6).forEach(p => all.push(p));
+            recap.places.topByDwell.slice(4).forEach(p => all.push(p));
+            recap.places.topByVisits.slice(4).forEach(p => all.push(p));
+            const seen = new Set(); const out = [];
+            for (const e of all) {
+                if (e.lat == null) continue;
+                const k = gkey(e.lat, e.lon);
+                if (seen.has(k)) continue;
+                seen.add(k); out.push(e);
+            }
+            return out.slice(0, 15);
+        }
+
+        function applyCachedLabels(recap) {
+            collectGeoTargets(recap).forEach(e => {
+                const g = geoCache.get(gkey(e.lat, e.lon));
+                if (g) {
+                    e.geoName = g.name;
+                    e.geoAddress = g.address;
+                    e.confidence = Math.max(g.confidence || 0, e.prob || 0);
+                }
+            });
+        }
+
+        async function onLookupNames() {
+            storyState.geocodeEnabled = true;
+            document.getElementById('lookupNamesBtn').classList.add('active');
+            if (storyState.currentRecap) {
+                applyCachedLabels(storyState.currentRecap);
+                renderStory(storyState.currentRecap);
+                await geocodeMissing(storyState.currentRecap);
+            }
+        }
+
+        async function geocodeMissing(recap) {
+            const targets = collectGeoTargets(recap).filter(e => !geoCache.has(gkey(e.lat, e.lon)));
+            const btn = document.getElementById('lookupNamesBtn');
+            if (!targets.length) { btn.textContent = '🌐 Place names ✓'; return; }
+            let ok = 0, fail = 0, lastErr = '';
+            for (let i = 0; i < targets.length; i++) {
+                const e = targets[i];
+                btn.textContent = `🌐 Looking up ${i + 1}/${targets.length}…`;
+                try {
+                    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.lat}&lon=${e.lon}&zoom=16&addressdetails=1`;
+                    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    if (r.ok) {
+                        const j = await r.json();
+                        const g = parseGeo(j);
+                        if (g && (g.name || g.address)) { geoCache.set(gkey(e.lat, e.lon), g); ok++; }
+                        else { fail++; lastErr = 'empty result'; }
+                    } else {
+                        fail++; lastErr = `HTTP ${r.status}`;
+                        console.warn('[geocode] HTTP', r.status, 'for', e.lat, e.lon);
+                    }
+                    // Re-render incrementally so names appear as they arrive
+                    if (ok > 0 && storyState.currentRecap === recap) reRenderPreservingScroll(recap);
+                } catch (err) {
+                    fail++; lastErr = err && err.message ? err.message : 'network error';
+                    console.warn('[geocode] fetch failed:', err);
+                }
+                await new Promise(res => setTimeout(res, 1100)); // honor Nominatim ≤1 req/s
+            }
+            console.log(`[geocode] done: ${ok} ok, ${fail} failed`);
+            if (storyState.currentRecap === recap) { applyCachedLabels(recap); reRenderPreservingScroll(recap); }
+            if (ok === 0) {
+                btn.textContent = '🌐 Reveal place names';
+                btn.classList.remove('active');
+                storyState.geocodeEnabled = false;
+                showError(`Couldn't reach OpenStreetMap (${lastErr}). nominatim.openstreetmap.org may be blocked by an extension, VPN, or network.`);
+            } else {
+                btn.textContent = fail > 0 ? `🌐 ${ok} named (${fail} failed)` : '🌐 Place names ✓';
+            }
+        }
+
+        /** Re-render the current story but keep the user's scroll position. */
+        function reRenderPreservingScroll(recap) {
+            const scroller = document.getElementById('story-scroller');
+            const y = scroller ? scroller.scrollTop : 0;
+            renderStory(recap);
+            if (scroller) requestAnimationFrame(() => { scroller.scrollTop = y; });
+        }
+
+        /* ---- Local photo correlation (opt-in, folder select, no upload) ---- */
+
+        function readJsonSafe(file) {
+            return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => { try { resolve(JSON.parse(reader.result)); } catch { resolve(null); } };
+                reader.onerror = () => resolve(null);
+                reader.readAsText(file);
+            });
+        }
+        function parsePhotoTs(o) {
+            const t = (o.photoTakenTime && o.photoTakenTime.timestamp) || (o.creationTime && o.creationTime.timestamp);
+            if (t == null) return null;
+            const n = parseInt(t, 10);
+            return isNaN(n) ? null : n * 1000;
+        }
+        function resolveImageName(jsonName) {
+            return jsonName.replace(/\.json$/i, '').replace(/\.supplemental-meta.*$/i, '');
+        }
+
+        async function handlePhotosSelected(fileList) {
+            const files = [...fileList];
+            const images = new Map();
+            const sidecars = [];
+            for (const f of files) {
+                if (/\.json$/i.test(f.name)) sidecars.push(f);
+                else if (/\.(jpe?g|png|heic|heif|webp|gif)$/i.test(f.name)) images.set(f.name, f);
+            }
+            const btn = document.getElementById('addPhotosBtn');
+            const cap = Math.min(sidecars.length, 5000);
+            const meta = [];
+            for (let i = 0; i < cap; i += 50) {
+                const batch = sidecars.slice(i, i + 50);
+                const parsed = await Promise.all(batch.map(readJsonSafe));
+                for (let j = 0; j < parsed.length; j++) {
+                    const o = parsed[j];
+                    if (!o) continue;
+                    const ts = parsePhotoTs(o);
+                    if (ts == null) continue;
+                    const geo = o.geoData || o.geoDataExif || {};
+                    const lat = geo.latitude, lon = geo.longitude;
+                    const file = images.get(resolveImageName(batch[j].name));
+                    meta.push({ ts, lat: (lat && lat !== 0) ? lat : null, lon: (lon && lon !== 0) ? lon : null, file });
+                }
+                btn.textContent = `📷 Reading ${Math.min(i + 50, cap)}/${cap}…`;
+            }
+            storyState.photoMeta = meta;
+            const withFiles = meta.filter(m => m.file).length;
+            btn.textContent = `📷 ${withFiles.toLocaleString()} photos`;
+            if (cap < sidecars.length) console.warn(`Photo sidecars capped at ${cap} of ${sidecars.length}.`);
+            renderCurrentSeason();
         }
 
         /* ============================================
