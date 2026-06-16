@@ -1997,9 +1997,31 @@
                 mergeSemantic(c, e.semanticType, e.prob);
                 if (e.prob > c.prob) c.prob = e.prob;
             });
-            const clusterList = [...clusters.values()];
+            let clusterList = [...clusters.values()];
+            clusterList.forEach(c => { c.lat = c.sumLat / c.count; c.lon = c.sumLon / c.count; });
+
+            // Home and Work are unique places per person — unify them by label
+            // even when fragments sit far apart (GPS spread, separate placeIDs).
+            // Only Home/Work: generic categories (Gym, Restaurant) stay distinct.
+            ['Home', 'Work'].forEach(label => {
+                const group = clusterList.filter(c => c.semanticType === label);
+                if (group.length <= 1) return;
+                const base = group[0];
+                for (let i = 1; i < group.length; i++) {
+                    const c = group[i];
+                    base.count += c.count; base.dwellMs += c.dwellMs;
+                    base.sumLat += c.sumLat; base.sumLon += c.sumLon;
+                    if (c.firstSeen < base.firstSeen) base.firstSeen = c.firstSeen;
+                    if (c.prob > base.prob) base.prob = c.prob;
+                    c.members.forEach(m => base.members.push(m));
+                    c._merged = true;
+                }
+                base.lat = base.sumLat / base.count; base.lon = base.sumLon / base.count;
+            });
+            clusterList = clusterList.filter(c => !c._merged);
+
             const keyToMid = new Map();
-            clusterList.forEach(c => { c.lat = c.sumLat / c.count; c.lon = c.sumLon / c.count; c.members.forEach(k => keyToMid.set(k, c.mid)); });
+            clusterList.forEach(c => c.members.forEach(k => keyToMid.set(k, c.mid)));
             return { clusterList, keyToMid, midToCluster: new Map(clusterList.map(c => [c.mid, c])) };
         }
 
