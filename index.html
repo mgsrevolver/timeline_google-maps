@@ -1906,7 +1906,7 @@
            ============================================ */
 
         // Memoized indices (rebuilt when a new dataset is loaded)
-        let recapIndices = { firstSeen: null, home: null, dataset: null };
+        let recapIndices = { model: null, home: null, dataset: null };
 
         /** Stable identity for a place: Google placeID, else an ~11m coordinate grid cell. */
         function placeKey(p) {
@@ -1931,57 +1931,94 @@
             return min === Infinity ? null : { min, max };
         }
 
-        /** First-ever visit time per place, for "new places this season" detection. */
-        function buildPlaceFirstSeenIndex(locationData) {
-            const idx = new Map();
-            for (const p of locationData) {
-                if (p.source !== 'visit' || p.timestamp == null) continue;
-                const k = placeKey(p);
-                const prev = idx.get(k);
-                if (prev == null || p.timestamp < prev) idx.set(k, p.timestamp);
-            }
-            return idx;
+        /** Unify a semanticType into a merged cluster, with Home > Work > best-probability priority. */
+        function mergeSemantic(cluster, semanticType, prob) {
+            if (semanticType && /home/i.test(semanticType)) { cluster.semanticType = 'Home'; return; }
+            if (cluster.semanticType === 'Home') return;
+            if (semanticType && /work/i.test(semanticType)) { cluster.semanticType = 'Work'; return; }
+            if (cluster.semanticType === 'Work') return;
+            if (semanticType && (cluster.semanticType == null || prob >= cluster.prob)) cluster.semanticType = semanticType;
         }
 
-        /** Detect the user's home across the whole dataset (semanticType → dwell → frequency → none). */
-        function detectHome(locationData) {
-            const agg = new Map(); // key -> {count, dwellMs, lat, lon, isHome, prob, semanticType}
+        /**
+         * Build a model of physical places from all visit points. Google fragments
+         * one real place (e.g. home) into several placeIDs/coordinates; we aggregate
+         * by placeKey, then merge fragments whose centroids are within ~60m into a
+         * single cluster. A cluster's semanticType is Home/Work if ANY fragment was,
+         * so the whole place is labeled and privacy-protected together.
+         * Returns { clusterList, keyToMid, midToCluster }.
+         */
+        function buildPlaceModel(locationData) {
+            const byKey = new Map();
             for (const p of locationData) {
                 if (p.source !== 'visit') continue;
                 const k = placeKey(p);
-                let e = agg.get(k);
-                if (!e) { e = { count: 0, dwellMs: 0, lat: p.lat, lon: p.lon, sumLat: 0, sumLon: 0, isHome: false, prob: 0, semanticType: null }; agg.set(k, e); }
-                e.count++;
-                e.sumLat += p.lat; e.sumLon += p.lon;
+                let e = byKey.get(k);
+                if (!e) { e = { key: k, count: 0, dwellMs: 0, sumLat: 0, sumLon: 0, prob: 0, semanticType: null, firstSeen: Infinity }; byKey.set(k, e); }
+                e.count++; e.sumLat += p.lat; e.sumLon += p.lon;
                 if (p.durationMs != null) e.dwellMs += p.durationMs;
-                if (p.semanticType && /home/i.test(p.semanticType)) e.isHome = true;
                 const pr = p.probability || 0;
                 if (pr >= e.prob) { e.prob = pr; if (p.semanticType) e.semanticType = p.semanticType; }
                 if (!e.semanticType && p.semanticType) e.semanticType = p.semanticType;
+                if (p.timestamp != null && p.timestamp < e.firstSeen) e.firstSeen = p.timestamp;
             }
-            if (agg.size === 0) return { key: null, lat: null, lon: null, method: 'none', prob: 0, semanticType: null };
+            const entries = [...byKey.values()];
+            entries.forEach(e => { e.lat = e.sumLat / e.count; e.lon = e.sumLon / e.count; });
 
+            // Union-find proximity merge using a ~0.001° grid to keep it near-linear
+            const parent = entries.map((_, i) => i);
+            const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+            const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+            const CELL = 0.001, MERGE_M = 60;
+            const cellId = (lat, lon) => `${Math.round(lat / CELL)},${Math.round(lon / CELL)}`;
+            const grid = new Map();
+            entries.forEach((e, i) => { const c = cellId(e.lat, e.lon); if (!grid.has(c)) grid.set(c, []); grid.get(c).push(i); });
+            entries.forEach((e, i) => {
+                const cx = Math.round(e.lat / CELL), cy = Math.round(e.lon / CELL);
+                for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+                    const arr = grid.get(`${cx + dx},${cy + dy}`);
+                    if (!arr) continue;
+                    for (const j of arr) {
+                        if (j <= i) continue;
+                        const f = entries[j];
+                        if (haversineMeters(e.lat, e.lon, f.lat, f.lon) <= MERGE_M) union(i, j);
+                    }
+                }
+            });
+
+            const clusters = new Map();
+            entries.forEach((e, i) => {
+                const r = find(i);
+                let c = clusters.get(r);
+                if (!c) { c = { mid: 'm' + r, count: 0, dwellMs: 0, sumLat: 0, sumLon: 0, prob: 0, semanticType: null, firstSeen: Infinity, members: [] }; clusters.set(r, c); }
+                c.count += e.count; c.dwellMs += e.dwellMs; c.sumLat += e.sumLat; c.sumLon += e.sumLon;
+                if (e.firstSeen < c.firstSeen) c.firstSeen = e.firstSeen;
+                c.members.push(e.key);
+                mergeSemantic(c, e.semanticType, e.prob);
+                if (e.prob > c.prob) c.prob = e.prob;
+            });
+            const clusterList = [...clusters.values()];
+            const keyToMid = new Map();
+            clusterList.forEach(c => { c.lat = c.sumLat / c.count; c.lon = c.sumLon / c.count; c.members.forEach(k => keyToMid.set(k, c.mid)); });
+            return { clusterList, keyToMid, midToCluster: new Map(clusterList.map(c => [c.mid, c])) };
+        }
+
+        /** Detect home from the merged place model (semanticType → dwell → frequency → none). */
+        function detectHomeFromModel(model) {
+            const cs = model.clusterList;
+            if (!cs.length) return { mid: null, lat: null, lon: null, method: 'none', prob: 0, semanticType: null };
             let best = null, method = 'none';
-            for (const [k, e] of agg) { if (e.isHome && (!best || e.count > best.e.count)) { best = { k, e }; method = 'semanticType'; } }
-            if (!best) {
-                for (const [k, e] of agg) { if (e.dwellMs > 0 && (!best || e.dwellMs > best.e.dwellMs)) { best = { k, e }; method = 'dwell'; } }
-            }
-            if (!best) {
-                for (const [k, e] of agg) { if (!best || e.count > best.e.count) { best = { k, e }; method = 'frequency'; } }
-            }
-            const hLat = best.e.count > 0 ? best.e.sumLat / best.e.count : best.e.lat;
-            const hLon = best.e.count > 0 ? best.e.sumLon / best.e.count : best.e.lon;
-            return { key: best.k, lat: hLat, lon: hLon, method, prob: best.e.prob, semanticType: best.e.semanticType };
+            for (const c of cs) { if (c.semanticType === 'Home' && (!best || c.count > best.count)) { best = c; method = 'semanticType'; } }
+            if (!best) for (const c of cs) { if (c.dwellMs > 0 && (!best || c.dwellMs > best.dwellMs)) { best = c; method = 'dwell'; } }
+            if (!best) for (const c of cs) { if (!best || c.count > best.count) { best = c; method = 'frequency'; } }
+            return { mid: best.mid, lat: best.lat, lon: best.lon, method, prob: best.prob, semanticType: best.semanticType };
         }
 
         /** (Re)build memoized indices for the current dataset. */
         function ensureRecapIndices(locationData) {
-            if (recapIndices.dataset === locationData && recapIndices.firstSeen) return;
-            recapIndices = {
-                dataset: locationData,
-                firstSeen: buildPlaceFirstSeenIndex(locationData),
-                home: detectHome(locationData)
-            };
+            if (recapIndices.dataset === locationData && recapIndices.model) return;
+            const model = buildPlaceModel(locationData);
+            recapIndices = { dataset: locationData, model, home: detectHomeFromModel(model) };
         }
 
         /** Build a custom season window from explicit millisecond bounds. */
@@ -2056,7 +2093,7 @@
          */
         function computeRecap(locationData, season) {
             ensureRecapIndices(locationData);
-            const { firstSeen, home: homeId } = recapIndices;
+            const { model, home: homeId } = recapIndices;
 
             const pts = locationData.filter(p => p.timestamp != null && p.timestamp >= season.startMs && p.timestamp <= season.endMs);
 
@@ -2098,40 +2135,43 @@
                     }
                     if (p.activityType) meta.hasActivityData = true;
                 } else if (p.source === 'visit') {
-                    const k = placeKey(p);
-                    let e = placeAgg.get(k);
-                    if (!e) { e = { key: k, count: 0, dwellMs: 0, lat: p.lat, lon: p.lon, sumLat: 0, sumLon: 0, prob: 0, semanticType: null }; placeAgg.set(k, e); }
+                    // Aggregate by merged place id so fragments of the same physical
+                    // place (e.g. home) combine; use the cluster's stable label.
+                    const mid = model.keyToMid.get(placeKey(p)) || placeKey(p);
+                    let e = placeAgg.get(mid);
+                    if (!e) {
+                        const cl = model.midToCluster.get(mid);
+                        e = { key: mid, count: 0, dwellMs: 0, lat: p.lat, lon: p.lon, sumLat: 0, sumLon: 0, prob: cl ? cl.prob : (p.probability || 0), semanticType: cl ? cl.semanticType : (p.semanticType || null) };
+                        placeAgg.set(mid, e);
+                    }
                     e.count++;
                     e.sumLat += p.lat; e.sumLon += p.lon;
                     if (p.durationMs != null) { e.dwellMs += p.durationMs; meta.hasDurationData = true; }
-                    const pr = p.probability || 0;
-                    if (pr >= e.prob) { e.prob = pr; if (p.semanticType) e.semanticType = p.semanticType; }
-                    if (!e.semanticType && p.semanticType) e.semanticType = p.semanticType;
                 }
             }
 
             // Places (use averaged centroid for steadier geocoding)
             const places = [...placeAgg.values()];
             places.forEach(e => { if (e.count > 0) { e.lat = e.sumLat / e.count; e.lon = e.sumLon / e.count; } });
-            const newPlaces = places.filter(e => { const f = firstSeen.get(e.key); return f != null && f >= season.startMs; }).length;
+            const newPlaces = places.filter(e => { const cl = model.midToCluster.get(e.key); const f = cl ? cl.firstSeen : Infinity; return f != null && f >= season.startMs; }).length;
             // Top lists exclude the detected home so "aside from home" framing is accurate
-            const notHome = places.filter(e => e.key !== homeId.key);
+            const notHome = places.filter(e => e.key !== homeId.mid);
             const mapEntry = e => ({ key: e.key, lat: e.lat, lon: e.lon, count: e.count, dwellMs: e.dwellMs, prob: e.prob, semanticType: e.semanticType, geoName: null, geoAddress: null, confidence: null });
             const topByVisits = [...notHome].sort((a, b) => b.count - a.count).slice(0, 6).map(mapEntry);
             const topByDwell = [...notHome].filter(e => e.dwellMs > 0).sort((a, b) => b.dwellMs - a.dwellMs).slice(0, 6).map(mapEntry);
 
             // Home time this season
             let timeAtHomeMs = 0, timeAwayMs = 0;
-            if (homeId.key) {
+            if (homeId.mid) {
                 for (const e of places) {
-                    if (e.key === homeId.key) timeAtHomeMs += e.dwellMs; else timeAwayMs += e.dwellMs;
+                    if (e.key === homeId.mid) timeAtHomeMs += e.dwellMs; else timeAwayMs += e.dwellMs;
                 }
             }
             const homeFraction = (timeAtHomeMs + timeAwayMs) > 0 ? timeAtHomeMs / (timeAtHomeMs + timeAwayMs) : null;
 
             // Extremes
             let farthestPoint = null;
-            if (homeId.key && homeId.lat != null) {
+            if (homeId.mid && homeId.lat != null) {
                 let maxD = -1;
                 for (const p of pts) {
                     const d = haversineMeters(homeId.lat, homeId.lon, p.lat, p.lon);
@@ -2144,7 +2184,7 @@
 
             // Footprint
             const cityClusters = [...cityGrid.values()].sort((a, b) => b.count - a.count).slice(0, 8)
-                .map(c => ({ lat: c.lat, lon: c.lon, count: c.count, prob: 0, semanticType: null, geoName: null, geoAddress: null, confidence: null }));
+                .map(c => ({ lat: c.lat, lon: c.lon, count: c.count, prob: 0, semanticType: null, isArea: true, geoName: null, geoAddress: null, confidence: null }));
             const footprintPoints = pts.filter(p => p.source !== 'visit' || true) // keep all, ordered by time
                 .map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp }))
                 .sort((a, b) => a.timestamp - b.timestamp);
@@ -2165,7 +2205,7 @@
                 },
                 places: { visited: places.length, newPlaces, topByVisits, topByDwell },
                 home: {
-                    key: homeId.key, lat: homeId.lat, lon: homeId.lon, method: homeId.method,
+                    key: homeId.mid, lat: homeId.lat, lon: homeId.lon, method: homeId.method,
                     prob: homeId.prob, semanticType: homeId.semanticType,
                     geoName: null, geoAddress: null, confidence: null,
                     timeAtHomeMs, timeAwayMs, homeFraction
@@ -3705,7 +3745,8 @@
                 btn.textContent = `🌐 Looking up ${i + 1}/${targets.length}…`;
                 highlightGeoNode(key);
                 try {
-                    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.lat}&lon=${e.lon}&zoom=18&addressdetails=1`;
+                    const zoom = e.isArea ? 12 : 18; // areas → city/neighborhood; places → building
+                    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${e.lat}&lon=${e.lon}&zoom=${zoom}&addressdetails=1`;
                     const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
                     if (r.ok) {
                         const j = await r.json();
